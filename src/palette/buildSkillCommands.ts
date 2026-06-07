@@ -10,14 +10,14 @@ function displayCost(skill: YtSkill): string {
   return skill.cost;
 }
 
-function detailLine(skill: YtSkill): string {
-  return `タイミング：${skill.timing || "―"}／判定：${skill.judge || "―"}／対象：${skill.target || "―"}／射程：${skill.range || "―"}／コスト：${displayCost(skill)}`;
-}
-
 function effectText(skill: YtSkill): string {
   const effect = hasText(skill.effect) ? skill.effect : "";
   const usage = hasText(skill.usage) ? ` 使用条件：${skill.usage}` : "";
-  return `${effect}${usage}`.trim();
+  return `${effect}${usage}`.replace(/\s+/g, " ").trim();
+}
+
+function passiveLine(skill: YtSkill): string {
+  return `《${skill.name}》${skill.level} /${skill.timing || "―"}/${skill.judge || "―"}/${skill.target || "―"}/${skill.range || "―"}/${displayCost(skill)}/ ${effectText(skill)}`.replace(/\s+/g, " ").trim();
 }
 
 function resourceCommands(skill: YtSkill): string[] {
@@ -50,7 +50,11 @@ function judgementCommand(skill: YtSkill): string | null {
 
 function isToggleSkill(skill: YtSkill): boolean {
   const text = `${skill.timing} ${skill.effect}`;
-  return /シーン終了まで持続|メインプロセス終了まで持続|影響がある場所にいる間|効果を受ける場所/.test(text);
+  return /シーン終了まで持続|メインプロセス終了まで持続|ラウンド終了まで持続|影響がある場所にいる間|効果を受ける場所/.test(text);
+}
+
+function shouldResetHere(skill: YtSkill): boolean {
+  return /メインプロセス終了まで持続|ラウンド終了まで持続/.test(skill.effect);
 }
 
 export function skillToLines(skill: YtSkill, custom: CustomCommandMap) {
@@ -61,9 +65,7 @@ export function skillToLines(skill: YtSkill, custom: CustomCommandMap) {
   const body = effectText(skill);
 
   if (isPassive) {
-    lines.push(`【パッシブ】《${skill.name}》${skill.level}`);
-    lines.push(detailLine(skill));
-    if (body) lines.push(`効果：${body}`);
+    lines.push(passiveLine(skill));
     if (isToggleSkill(skill)) lines.push(`:${skill.name}=1`, `:${skill.name}=0`);
   } else {
     const timing = skill.timing || "任意";
@@ -74,7 +76,8 @@ export function skillToLines(skill: YtSkill, custom: CustomCommandMap) {
     if (judge) lines.push(judge);
     if (isToggleSkill(skill)) {
       lines.push(`:${skill.name}=1`);
-      if (/シーン終了まで持続/.test(skill.effect)) resets.push({ scope: "scene", line: `:${skill.name}=0` });
+      if (shouldResetHere(skill)) lines.push(`:${skill.name}=0`);
+      else if (/シーン終了まで持続/.test(skill.effect)) resets.push({ scope: "scene", line: `:${skill.name}=0` });
     }
   }
 
