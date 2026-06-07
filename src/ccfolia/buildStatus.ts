@@ -13,7 +13,7 @@ function hasSkill(sheet: ParsedSheet, name: string): boolean {
 
 function isToggleSkill(skill: YtSkill): boolean {
   const text = `${skill.timing} ${skill.effect}`;
-  return /シーン終了まで持続|メインプロセス終了まで持続|影響がある場所にいる間|効果を受ける場所/.test(text);
+  return /シーン終了まで持続|メインプロセス終了まで持続|ラウンド終了まで持続|影響がある場所にいる間|効果を受ける場所/.test(text);
 }
 
 function addStatus(list: { label: string; value: string; max: string }[], existing: Set<string>, label: string, value: number | string, max: number | string) {
@@ -36,7 +36,6 @@ export function buildStatus(sheet: ParsedSheet, custom: CustomCommandMap) {
     ["命中BD", 0, 0],
     ["回避BD", 0, 0],
     ["ダメBD", 0, 0],
-    ["追加D", 0, 0],
     ["ダメバフ", 0, 0],
   ].map(([label, value, max]) => ({ label: String(label), value: String(value), max: String(max) }));
 
