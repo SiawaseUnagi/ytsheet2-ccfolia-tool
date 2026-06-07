@@ -20,6 +20,7 @@ export type ParsedSheet = {
   mp: number;
   fate: number;
   move: number;
+  initiative: number;
   phyDef: number;
   magDef: number;
   carry: number;
