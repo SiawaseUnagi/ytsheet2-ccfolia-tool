@@ -14,15 +14,17 @@ function sec() {
     ["判定直前", []],
     ["判定直後", []],
     ["クリンナッププロセス", []],
+    ["パッシブ", []],
+    ["効果参照", []],
     ["シーン終了時リセット", []],
     ["シナリオ開始時リセット", []],
     ["攻撃", []],
     ["判定", []],
-    ["効果参照", []],
   ]);
 }
 
 function mapTiming(t: string): string {
+  if (/パッシブ/.test(t)) return "パッシブ";
   if (/セットアップ/.test(t)) return "セットアッププロセス";
   if (/イニシアチブ/.test(t)) return "イニシアチブプロセス";
   if (/ムーブ/.test(t)) return "ムーブアクション";
@@ -33,6 +35,7 @@ function mapTiming(t: string): string {
   if (/判定.*直後/.test(t)) return "判定直後";
   if (/判定.*直前/.test(t)) return "判定直前";
   if (/クリンナップ/.test(t)) return "クリンナッププロセス";
+  if (/効果参照/.test(t)) return "効果参照";
   return "効果参照";
 }
 
@@ -74,7 +77,7 @@ export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): { te
   } else {
     for (const w of sheet.weapons) s.get("攻撃")?.push(`### ■攻撃：${w.name}`, `メジャーアクションで${w.name}による武器攻撃を行う。`, `{${w.name}_命中D}D+{${w.name}_命中判定}+{命中判定修正}+{判定BD}D+{命中BD}D>=0 命中判定　＠${w.name}`, `{${w.name}_攻撃力D}D+{${w.name}_攻撃力}+{ダメBD}D+{ダメバフ} 物理ダメージ　＠${w.name}`, "");
   }
-  const order = ["リソース操作", "セットアッププロセス", "イニシアチブプロセス", "ムーブアクション", "マイナーアクション", "メジャーアクション", "DR直前", "DR直後", "判定直前", "判定直後", "クリンナッププロセス", "シーン終了時リセット", "シナリオ開始時リセット", "攻撃", "判定", "効果参照"];
+  const order = ["リソース操作", "セットアッププロセス", "イニシアチブプロセス", "ムーブアクション", "マイナーアクション", "メジャーアクション", "DR直前", "DR直後", "判定直前", "判定直後", "クリンナッププロセス", "パッシブ", "効果参照", "シーン終了時リセット", "シナリオ開始時リセット", "攻撃", "判定"];
   const text = order.map((k) => `### ■${k}\n${(s.get(k) ?? []).join("\n")}`.trimEnd()).join("\n\n");
   return { text, warnings };
 }
