@@ -5,8 +5,19 @@ function hasText(value: string | undefined): boolean {
   return !!value && value !== "―" && value !== "-";
 }
 
+function displayCost(skill: YtSkill): string {
+  if (!hasText(skill.cost) || skill.cost === "0") return "―";
+  return skill.cost;
+}
+
 function detailLine(skill: YtSkill): string {
-  return `タイミング：${skill.timing || "―"}／判定：${skill.judge || "―"}／対象：${skill.target || "―"}／射程：${skill.range || "―"}／コスト：${skill.cost || "―"}`;
+  return `タイミング：${skill.timing || "―"}／判定：${skill.judge || "―"}／対象：${skill.target || "―"}／射程：${skill.range || "―"}／コスト：${displayCost(skill)}`;
+}
+
+function effectText(skill: YtSkill): string {
+  const effect = hasText(skill.effect) ? skill.effect : "";
+  const usage = hasText(skill.usage) ? ` 使用条件：${skill.usage}` : "";
+  return `${effect}${usage}`.trim();
 }
 
 function resourceCommands(skill: YtSkill): string[] {
@@ -17,9 +28,29 @@ function resourceCommands(skill: YtSkill): string[] {
   const allText = `${skill.usage} ${skill.effect}`;
   const ep = allText.match(/EPを\s*(\d+)\s*点消費/);
   if (ep) lines.push(`:EP-${ep[1]}`);
-  const fate = allText.match(/フェイトを\s*(\d+)\s*点消費/);
-  if (fate) lines.push(`:フェイト-${fate[1]}`);
+
+  const exactFate = allText.match(/フェイトを\s*(\d+)\s*点消費/);
+  if (exactFate) lines.push(`:フェイト-${exactFate[1]}`);
+  else if (/フェイト.*消費/.test(allText)) lines.push(":フェイト-1");
   return lines;
+}
+
+function judgementCommand(skill: YtSkill): string | null {
+  const judge = skill.judge.trim();
+  if (!hasText(judge) || /自動成功|なし|―|-/.test(judge)) return null;
+  if (/魔術/.test(judge)) return "{魔術D}D+{魔術判定}+{魔術判定修正}+{判定BD}D+{命中BD}D>=0 魔術判定";
+  if (/呪歌/.test(judge)) return "{呪歌D}D+{呪歌判定}+{呪歌判定修正}+{判定BD}D>=0 呪歌判定";
+  if (/錬金術/.test(judge)) return "{錬金術D}D+{錬金術判定}+{錬金術判定修正}+{判定BD}D>=0 錬金術判定";
+  if (/命中/.test(judge)) return "{命中D}D+{命中判定}+{命中判定修正}+{判定BD}D+{命中BD}D>=0 命中判定";
+  if (/回避/.test(judge)) return "{回避D}D+{回避判定}+{回避判定修正}+{判定BD}D+{回避BD}D>=0 回避判定";
+  const ability = judge.match(/(筋力|器用|敏捷|知力|感知|精神|幸運)/)?.[1];
+  if (ability) return `{${ability}D}D+{${ability}}+{${ability}判定修正}+{判定BD}D>=0 ${judge}`;
+  return `2D>=0 ${judge}`;
+}
+
+function isToggleSkill(skill: YtSkill): boolean {
+  const text = `${skill.timing} ${skill.effect}`;
+  return /シーン終了まで持続|メインプロセス終了まで持続|影響がある場所にいる間|効果を受ける場所/.test(text);
 }
 
 export function skillToLines(skill: YtSkill, custom: CustomCommandMap) {
@@ -27,16 +58,24 @@ export function skillToLines(skill: YtSkill, custom: CustomCommandMap) {
   const resets: { scope: "scene" | "scenario"; line: string }[] = [];
   const c = custom[skill.name];
   const isPassive = /パッシブ/.test(skill.timing);
+  const body = effectText(skill);
 
   if (isPassive) {
-    lines.push(`【効果参照】《${skill.name}》${skill.level}`);
+    lines.push(`【パッシブ】《${skill.name}》${skill.level}`);
     lines.push(detailLine(skill));
-    if (hasText(skill.effect)) lines.push(`効果：${skill.effect}`);
+    if (body) lines.push(`効果：${body}`);
+    if (isToggleSkill(skill)) lines.push(`:${skill.name}=1`, `:${skill.name}=0`);
   } else {
     const timing = skill.timing || "任意";
-    lines.push(`${timing}に《${skill.name}》${skill.level}を使用。${skill.effect}`.trim());
+    lines.push(`${timing}に《${skill.name}》${skill.level}を使用。${body}`.trim());
     if (c?.use?.length) lines.push(...c.use);
     else lines.push(...resourceCommands(skill));
+    const judge = judgementCommand(skill);
+    if (judge) lines.push(judge);
+    if (isToggleSkill(skill)) {
+      lines.push(`:${skill.name}=1`);
+      if (/シーン終了まで持続/.test(skill.effect)) resets.push({ scope: "scene", line: `:${skill.name}=0` });
+    }
   }
 
   const lim = detectUsageLimit(skill);
