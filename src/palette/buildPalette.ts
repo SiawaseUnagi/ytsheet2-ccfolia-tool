@@ -36,6 +36,10 @@ function mapTiming(t: string): string {
   return "効果参照";
 }
 
+function looksLikeUnreadLimitedUse(usage: string): boolean {
+  return /(シーン|シナリオ)\s*(?:\d+|SL(?:\+\d+)?)\s*回/.test(usage);
+}
+
 export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): { text: string; warnings: string[] } {
   const s = sec();
   const warnings = [...sheet.warnings];
@@ -44,7 +48,7 @@ export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): { te
     const out = skillToLines(sk, custom);
     s.get(target)?.push(...out.lines, "");
     for (const r of out.resets) s.get(r.scope === "scene" ? "シーン終了時リセット" : "シナリオ開始時リセット")?.push(r.line);
-    if (!out.usageLimit && /シーン|シナリオ/.test(`${sk.usage} ${sk.effect}`)) warnings.push(`《${sk.name}》：使用制限を読み取れませんでした。`);
+    if (!out.usageLimit && looksLikeUnreadLimitedUse(sk.usage)) warnings.push(`《${sk.name}》：使用制限を読み取れませんでした。`);
   }
   s.get("判定")?.push(
     "{筋力D}D+{筋力}+{筋力判定修正}+{判定BD}D>=0 【筋力】判定",
