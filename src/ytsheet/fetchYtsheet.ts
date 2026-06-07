@@ -1,5 +1,10 @@
+const ALLOWED_HOSTS = new Set(["yutorize.work", "www.yutorize.work"]);
+
 export function toJsonUrl(url: string): string {
   const u = new URL(url);
+  if (!ALLOWED_HOSTS.has(u.hostname)) {
+    throw new Error("ゆとシートURLは yutorize.work のものだけ使えます。");
+  }
   u.searchParams.set("mode", "json");
   return u.toString();
 }
