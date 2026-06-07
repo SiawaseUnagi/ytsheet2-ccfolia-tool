@@ -47,6 +47,10 @@ function passiveLine(skill: YtSkill): string {
   return `《${skill.name}》${skill.level} /${skill.timing || "―"}/${skill.judge || "―"}/${skill.target || "―"}/${skill.range || "―"}/${displayCost(skill)}/ ${effectText(skill)}`.replace(/\s+/g, " ").trim();
 }
 
+function normalizeNumberText(value: string): string {
+  return value.replace(/,/g, "").replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
+}
+
 function resourceCommands(skill: YtSkill): string[] {
   const lines: string[] = [];
   const cost = Number(skill.cost);
@@ -59,6 +63,12 @@ function resourceCommands(skill: YtSkill): string[] {
   const exactFate = allText.match(/フェイトを\s*(\d+)\s*点消費/);
   if (exactFate) lines.push(`:フェイト-${exactFate[1]}`);
   else if (/フェイト.*消費/.test(allText)) lines.push(":フェイト-1");
+
+  const hp = normalizeNumberText(allText).match(/(?:【?HP】?|ＨＰ)を\s*(\d+)\s*点?消費/);
+  if (hp) lines.push(`:HP-${hp[1]}`);
+
+  const gold = normalizeNumberText(allText).match(/(?:所持金を\s*)?(\d+)\s*G\s*消費/);
+  if (gold) lines.push(`:所持金-${gold[1]}`);
   return lines;
 }
 
