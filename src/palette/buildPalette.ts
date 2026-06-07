@@ -3,7 +3,7 @@ import { skillToLines } from "./buildSkillCommands";
 
 function sec() {
   return new Map<string, string[]>([
-    ["リソース操作", [":HP+", ":HP-", ":MP+", ":MP-", ":フェイト-", "", "2D　ドロップ品（）"]],
+    ["リソース操作", [":HP+", ":HP-", ":MP+", ":MP-", ":フェイト-", "", "2D　ドロップ品（）", "", "{回避D}D+{回避判定}+{回避判定修正}+{判定BD}D+{回避BD}D>=0 回避判定", "c(-{物理防御力}) 物理ダメージ計算", "c(-{魔法防御力}) 魔法ダメージ計算"]],
     ["セットアッププロセス", []],
     ["イニシアチブプロセス", []],
     ["ムーブアクション", ["ムーブアクション放棄。", "ムーブアクションで戦闘移動を行なう。({移動力}m)", "ムーブアクションで全力移動を行なう。({移動力}+5m)", "ムーブアクションで離脱を行なう。"]],
@@ -14,12 +14,13 @@ function sec() {
     ["判定直前", []],
     ["判定直後", []],
     ["クリンナッププロセス", []],
-    ["パッシブ", []],
+    ["装備効果", []],
     ["効果参照", []],
     ["シーン終了時リセット", []],
     ["シナリオ開始時リセット", []],
     ["攻撃", []],
     ["判定", []],
+    ["パッシブ", []],
   ]);
 }
 
@@ -43,6 +44,29 @@ function looksLikeUnreadLimitedUse(usage: string): boolean {
   return /(シーン|シナリオ)\s*(?:\d+|SL(?:\+\d+)?)\s*回/.test(usage);
 }
 
+function cleanHtml(text: unknown): string {
+  return String(text ?? "").replace(/&lt;br&gt;/g, " ").replace(/<br\s*\/?>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function collectEquipmentNotes(sheet: ParsedSheet): string[] {
+  const raw = sheet.raw;
+  const slots = [
+    ["右手", "armamentHandRName", "armamentHandRNote"],
+    ["左手", "armamentHandLName", "armamentHandLNote"],
+    ["頭部", "armamentHeadName", "armamentHeadNote"],
+    ["胴部", "armamentBodyName", "armamentBodyNote"],
+    ["補助防具", "armamentSubName", "armamentSubNote"],
+    ["装身具", "armamentOtherName", "armamentOtherNote"],
+  ];
+  const lines: string[] = [];
+  for (const [slot, nameKey, noteKey] of slots) {
+    const name = cleanHtml(raw[nameKey]);
+    const note = cleanHtml(raw[noteKey]);
+    if (name && note) lines.push(`【装備効果】${slot}：${name}。${note}`);
+  }
+  return lines;
+}
+
 export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): { text: string; warnings: string[] } {
   const s = sec();
   const warnings = [...sheet.warnings];
@@ -53,6 +77,7 @@ export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): { te
     for (const r of out.resets) s.get(r.scope === "scene" ? "シーン終了時リセット" : "シナリオ開始時リセット")?.push(r.line);
     if (!out.usageLimit && looksLikeUnreadLimitedUse(sk.usage)) warnings.push(`《${sk.name}》：使用制限を読み取れませんでした。`);
   }
+  s.get("装備効果")?.push(...collectEquipmentNotes(sheet));
   s.get("判定")?.push(
     "{筋力D}D+{筋力}+{筋力判定修正}+{判定BD}D>=0 【筋力】判定",
     "{器用D}D+{器用}+{器用判定修正}+{判定BD}D>=0 【器用】判定",
@@ -77,7 +102,7 @@ export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): { te
   } else {
     for (const w of sheet.weapons) s.get("攻撃")?.push(`### ■攻撃：${w.name}`, `メジャーアクションで${w.name}による武器攻撃を行う。`, `{${w.name}_命中D}D+{${w.name}_命中判定}+{命中判定修正}+{判定BD}D+{命中BD}D>=0 命中判定　＠${w.name}`, `{${w.name}_攻撃力D}D+{${w.name}_攻撃力}+{ダメBD}D+{ダメバフ} 物理ダメージ　＠${w.name}`, "");
   }
-  const order = ["リソース操作", "セットアッププロセス", "イニシアチブプロセス", "ムーブアクション", "マイナーアクション", "メジャーアクション", "DR直前", "DR直後", "判定直前", "判定直後", "クリンナッププロセス", "パッシブ", "効果参照", "シーン終了時リセット", "シナリオ開始時リセット", "攻撃", "判定"];
+  const order = ["リソース操作", "セットアッププロセス", "イニシアチブプロセス", "ムーブアクション", "マイナーアクション", "メジャーアクション", "DR直前", "DR直後", "判定直前", "判定直後", "クリンナッププロセス", "装備効果", "効果参照", "シーン終了時リセット", "シナリオ開始時リセット", "攻撃", "判定", "パッシブ"];
   const text = order.map((k) => `### ■${k}\n${(s.get(k) ?? []).join("\n")}`.trimEnd()).join("\n\n");
   return { text, warnings };
 }
