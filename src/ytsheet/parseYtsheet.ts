@@ -21,6 +21,12 @@ function getText(raw: Record<string, unknown>, key: string): string {
   return normalizeText(String(raw[key] ?? ""));
 }
 
+function isWeaponLike(type: string): boolean {
+  const t = type.trim();
+  if (!t || t === "―" || t === "-" || t === "盾" || t === "道具") return false;
+  return true;
+}
+
 function parseSkills(raw: Record<string, unknown>): YtSkill[] {
   const table = raw.skill as unknown[] | undefined;
   if (Array.isArray(table)) {
@@ -72,12 +78,13 @@ function parseWeapons(raw: Record<string, unknown>): WeaponData[] {
         atk: safeNumber(o.atk, 0),
         atkDice: safeNumber(o.atkDice, 2),
       };
-    }).filter((w) => w.name);
+    }).filter((w) => w.name && isWeaponLike(normalizeText(String((items.find((x) => (x as Record<string, unknown>).name === w.name) as Record<string, unknown> | undefined)?.type ?? ""))));
   }
 
   const weapons: WeaponData[] = [];
   const right = getText(raw, "armamentHandRName");
-  if (right) weapons.push({
+  const rightType = getText(raw, "armamentHandRType");
+  if (right && isWeaponLike(rightType)) weapons.push({
     name: right,
     hit: pick(raw, ["battleTotalAccR", "battleTotalAcc"], 0),
     hitDice: pick(raw, ["battleDiceAcc"], 2),
@@ -85,7 +92,8 @@ function parseWeapons(raw: Record<string, unknown>): WeaponData[] {
     atkDice: pick(raw, ["battleDiceAtk"], 2),
   });
   const left = getText(raw, "armamentHandLName");
-  if (left) weapons.push({
+  const leftType = getText(raw, "armamentHandLType");
+  if (left && isWeaponLike(leftType)) weapons.push({
     name: left,
     hit: pick(raw, ["battleTotalAccL", "battleTotalAcc"], 0),
     hitDice: pick(raw, ["battleDiceAcc"], 2),
