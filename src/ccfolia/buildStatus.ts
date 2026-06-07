@@ -2,6 +2,11 @@ import type { CustomCommandMap, ParsedSheet } from "../ytsheet/types";
 import { detectUsageLimit } from "../palette/detectUsageLimit";
 import { safeNumber } from "../utils/safeNumber";
 
+const ALIASES: Record<string, string> = {
+  物防: "物理防御力",
+  魔防: "魔法防御力",
+};
+
 export function buildStatus(sheet: ParsedSheet, custom: CustomCommandMap) {
   const fixed = [
     ["HP", sheet.hp, sheet.hp],
@@ -19,22 +24,33 @@ export function buildStatus(sheet: ParsedSheet, custom: CustomCommandMap) {
     ["ダメバフ", 0, 0],
   ].map(([label, value, max]) => ({ label, value: String(value), max: String(max) }));
 
+  const existing = new Set(fixed.map((s) => s.label));
   const extras: { label: string; value: string; max: string }[] = [];
   const raw = sheet.raw;
   const unitStatusNum = safeNumber(raw.unitStatusNum, 0);
   for (let i = 1; i <= unitStatusNum; i++) {
-    const label = String(raw[`unitStatus${i}Label`] ?? "").trim();
+    const rawLabel = String(raw[`unitStatus${i}Label`] ?? "").trim();
+    const label = ALIASES[rawLabel] ?? rawLabel;
     const value = safeNumber(raw[`unitStatus${i}Value`], 0);
-    if (label && !fixed.some((s) => s.label === label)) extras.push({ label, value: String(value), max: "0" });
+    if (label && !existing.has(label)) {
+      extras.push({ label, value: String(value), max: "0" });
+      existing.add(label);
+    }
   }
 
   for (const skill of sheet.skills) {
     const limit = detectUsageLimit(skill);
-    if (limit && !extras.some((s) => s.label === skill.name)) extras.push({ label: skill.name, value: String(limit.max), max: String(limit.max) });
+    if (limit && !existing.has(skill.name)) {
+      extras.push({ label: skill.name, value: String(limit.max), max: String(limit.max) });
+      existing.add(skill.name);
+    }
   }
 
   for (const c of Object.values(custom)) {
-    if (c.status) extras.push({ label: c.status.label ?? "カスタム", value: String(c.status.initial ?? 0), max: String(c.status.max ?? 0) });
+    if (c.status) {
+      const label = c.status.label ?? "カスタム";
+      if (!existing.has(label)) extras.push({ label, value: String(c.status.initial ?? 0), max: String(c.status.max ?? 0) });
+    }
   }
 
   return [...fixed, ...extras];
