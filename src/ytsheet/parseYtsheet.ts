@@ -99,6 +99,7 @@ export function parseYtsheet(raw: Record<string, unknown>, baseUrl: string): Par
   const warnings: string[] = [];
   const abilities: Record<string, number> = {};
   for (const [label, key] of ABI_MAP) abilities[label] = pick(raw, [key, label], 0);
+  const actionValue = pick(raw, ["battleTotalIni", "initiative", "行動値"], 0);
   const parsed: ParsedSheet = {
     raw,
     name: String(raw.characterName ?? raw.pcName ?? "(名称不明)"),
@@ -107,9 +108,10 @@ export function parseYtsheet(raw: Record<string, unknown>, baseUrl: string): Par
     mp: pick(raw, ["mpTotal", "maxMp", "mp"], 0),
     fate: pick(raw, ["fateTotal", "fate", "フェイト"], 0),
     move: pick(raw, ["battleTotalMove", "move", "移動力"], 0),
+    initiative: actionValue + 0.1,
     phyDef: pick(raw, ["battleTotalDef", "phyDef", "物理防御力"], 0),
     magDef: pick(raw, ["battleTotalMDef", "magDef", "魔法防御力"], 0),
-    carry: pick(raw, ["weightLimitItems", "carry", "携帯可能重量"], 0),
+    carry: pick(raw, ["weightItems", "carry", "携帯重量"], 0),
     abilities,
     skills: parseSkills(raw),
     weapons: parseWeapons(raw),
