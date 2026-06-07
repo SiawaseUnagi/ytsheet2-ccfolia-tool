@@ -1,28 +1,29 @@
-import type { CustomCommandMap, ParsedSheet, WeaponData } from "../ytsheet/types";
+import type { CustomCommandMap, ParsedSheet, WeaponData, YtSkill } from "../ytsheet/types";
 import { skillToLines } from "./buildSkillCommands";
 
 function sec() {
   return new Map<string, string[]>([
     ["リソース操作", [":HP+", ":HP-", ":MP+", ":MP-", ":フェイト-", "", "2D　ドロップ品（）", "", "{回避D}D+{回避判定}+{回避判定修正}+{判定BD}D+{回避BD}D>=0 回避判定", "c(-{物理防御力}) 物理ダメージ計算", "c(-{魔法防御力}) 魔法ダメージ計算"]],
-    ["セットアッププロセス", []],
-    ["イニシアチブプロセス", []],
-    ["ムーブアクション", ["ムーブアクション放棄。", "ムーブアクションで戦闘移動を行なう。({移動力}m)", "ムーブアクションで全力移動を行なう。({移動力}+5m)", "ムーブアクションで離脱を行なう。"]],
-    ["マイナーアクション", ["マイナーアクション放棄。", "マイナーでHPPを使用。", "マイナーでMPPを使用。", "マイナーでHHPPを使用。", "マイナーでHMPPを使用。", "マイナーで毒消しを使用。"]],
-    ["メジャーアクション", []],
-    ["フリーアクション", []],
-    ["レガシーアクション", []],
-    ["リアクション", []],
+    ["戦闘前", []],
+    ["セットアップ", []],
+    ["イニシアチブ", []],
+    ["フリー", []],
+    ["ムーブ", ["ムーブアクション放棄。", "ムーブアクションで戦闘移動を行なう。({移動力}m)", "ムーブアクションで全力移動を行なう。({移動力}+5m)", "ムーブアクションで離脱を行なう。"]],
+    ["レガシー", []],
+    ["マイナー", ["マイナーアクション放棄。", "マイナーでHPPを使用。", "マイナーでMPPを使用。", "マイナーでHHPPを使用。", "マイナーでHMPPを使用。", "マイナーで毒消しを使用。"]],
+    ["メジャー", []],
+    ["判定の直前", []],
+    ["判定の直後", []],
     ["DR直前", []],
     ["DR直後", []],
-    ["判定直前", []],
-    ["判定直後", []],
+    ["リアクション", []],
+    ["クリンナップ", []],
     ["戦闘不能", []],
-    ["クリンナッププロセス", []],
     ["効果参照", []],
+    ["アイテム", []],
     ["装備効果", []],
     ["シーン終了時リセット", []],
     ["シナリオ開始時リセット", []],
-    ["攻撃", []],
     ["判定", []],
     ["パッシブ", []],
   ]);
@@ -30,23 +31,28 @@ function sec() {
 
 function mapTiming(t: string): string {
   if (/パッシブ/.test(t)) return "パッシブ";
-  if (/セットアップ/.test(t)) return "セットアッププロセス";
-  if (/イニシアチブ/.test(t)) return "イニシアチブプロセス";
-  if (/ムーブ/.test(t)) return "ムーブアクション";
-  if (/マイナー/.test(t)) return "マイナーアクション";
-  if (/メジャー/.test(t)) return "メジャーアクション";
-  if (/フリー/.test(t)) return "フリーアクション";
-  if (/レガシー/.test(t)) return "レガシーアクション";
-  if (/リアクション/.test(t)) return "リアクション";
-  if (/戦闘不能/.test(t)) return "戦闘不能";
-  if (/アイテム/.test(t)) return "効果参照";
-  if (/ダメージロール.*直後|DRの直後|DR直後/.test(t)) return "DR直後";
+  if (/戦闘前/.test(t)) return "戦闘前";
+  if (/セットアップ/.test(t)) return "セットアップ";
+  if (/イニシアチブ/.test(t)) return "イニシアチブ";
+  if (/フリー/.test(t)) return "フリー";
+  if (/ムーブ/.test(t)) return "ムーブ";
+  if (/レガシー/.test(t)) return "レガシー";
+  if (/マイナー/.test(t)) return "マイナー";
+  if (/メジャー/.test(t)) return "メジャー";
+  if (/判定.*直前/.test(t)) return "判定の直前";
+  if (/判定.*直後/.test(t)) return "判定の直後";
   if (/ダメージロール.*直前|DRの直前|DR直前/.test(t)) return "DR直前";
-  if (/判定.*直後/.test(t)) return "判定直後";
-  if (/判定.*直前/.test(t)) return "判定直前";
-  if (/クリンナップ/.test(t)) return "クリンナッププロセス";
+  if (/ダメージロール.*直後|DRの直後|DR直後/.test(t)) return "DR直後";
+  if (/リアクション/.test(t)) return "リアクション";
+  if (/クリンナップ/.test(t)) return "クリンナップ";
+  if (/戦闘不能/.test(t)) return "戦闘不能";
+  if (/アイテム/.test(t)) return "アイテム";
   if (/効果参照/.test(t)) return "効果参照";
   return "効果参照";
+}
+
+function referencedSkillName(timing: string): string | null {
+  return timing.trim().match(/^《(.+)》$/)?.[1] ?? null;
 }
 
 function looksLikeUnreadLimitedUse(usage: string): boolean {
@@ -97,17 +103,59 @@ function pushSkillLines(map: Map<string, string[]>, target: string, lines: strin
   else map.get(target)?.push(...lines, "");
 }
 
+type SkillOutput = {
+  skill: YtSkill;
+  target: string;
+  lines: string[];
+  resets: { scope: "scene" | "scenario"; line: string }[];
+  usageLimit: unknown;
+};
+
+function pushResets(map: Map<string, string[]>, resets: SkillOutput["resets"]) {
+  for (const r of resets) map.get(r.scope === "scene" ? "シーン終了時リセット" : "シナリオ開始時リセット")?.push(r.line);
+}
+
 export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): { text: string; warnings: string[] } {
   const s = sec();
   const warnings = [...sheet.warnings];
-  s.get("メジャーアクション")?.push(...weaponAttackLines(sheet.weapons));
+  s.get("メジャー")?.push(...weaponAttackLines(sheet.weapons));
+
+  const dependent = new Map<string, SkillOutput[]>();
+  const independent: SkillOutput[] = [];
+
   for (const sk of sheet.skills) {
-    const target = mapTiming(sk.timing);
+    const refName = referencedSkillName(sk.timing);
+    const target = refName ? "効果参照" : mapTiming(sk.timing);
     const out = skillToLines(sk, custom);
-    pushSkillLines(s, target, out.lines);
-    for (const r of out.resets) s.get(r.scope === "scene" ? "シーン終了時リセット" : "シナリオ開始時リセット")?.push(r.line);
+    const item: SkillOutput = { skill: sk, target, lines: out.lines, resets: out.resets, usageLimit: out.usageLimit };
+    if (refName) {
+      const list = dependent.get(refName) ?? [];
+      list.push(item);
+      dependent.set(refName, list);
+    } else {
+      independent.push(item);
+    }
     if (!out.usageLimit && looksLikeUnreadLimitedUse(sk.usage)) warnings.push(`《${sk.name}》：使用制限を読み取れませんでした。`);
   }
+
+  for (const item of independent) {
+    pushSkillLines(s, item.target, item.lines);
+    pushResets(s, item.resets);
+    const children = dependent.get(item.skill.name) ?? [];
+    for (const child of children) {
+      pushSkillLines(s, item.target, child.lines);
+      pushResets(s, child.resets);
+    }
+    dependent.delete(item.skill.name);
+  }
+
+  for (const children of dependent.values()) {
+    for (const child of children) {
+      pushSkillLines(s, "効果参照", child.lines);
+      pushResets(s, child.resets);
+    }
+  }
+
   s.get("装備効果")?.push(...collectEquipmentNotes(sheet));
   s.get("判定")?.push(
     "{筋力D}D+{筋力}+{筋力判定修正}+{判定BD}D>=0 【筋力】判定",
@@ -128,7 +176,8 @@ export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): { te
     "{呪歌D}D+{呪歌判定}+{呪歌判定修正}+{判定BD}D>=0 呪歌判定",
     "{錬金術D}D+{錬金術判定}+{錬金術判定修正}+{判定BD}D>=0 錬金術判定",
   );
-  const order = ["リソース操作", "セットアッププロセス", "イニシアチブプロセス", "ムーブアクション", "マイナーアクション", "メジャーアクション", "フリーアクション", "レガシーアクション", "リアクション", "DR直前", "DR直後", "判定直前", "判定直後", "戦闘不能", "クリンナッププロセス", "効果参照", "装備効果", "シーン終了時リセット", "シナリオ開始時リセット", "攻撃", "判定", "パッシブ"];
+
+  const order = ["リソース操作", "戦闘前", "セットアップ", "イニシアチブ", "フリー", "ムーブ", "レガシー", "マイナー", "メジャー", "判定の直前", "判定の直後", "DR直前", "DR直後", "リアクション", "クリンナップ", "戦闘不能", "効果参照", "アイテム", "装備効果", "シーン終了時リセット", "シナリオ開始時リセット", "判定", "パッシブ"];
   const text = order.map((k) => `### ■${k}\n${(s.get(k) ?? []).join("\n")}`.trimEnd()).join("\n\n");
   return { text, warnings };
 }
