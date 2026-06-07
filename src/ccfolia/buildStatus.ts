@@ -16,6 +16,15 @@ function isToggleSkill(skill: YtSkill): boolean {
   return /シーン終了まで持続|メインプロセス終了まで持続|ラウンド終了まで持続|影響がある場所にいる間|効果を受ける場所/.test(text);
 }
 
+function normalizeNumberText(value: string): string {
+  return value.replace(/,/g, "").replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
+}
+
+function consumesGold(skill: YtSkill): boolean {
+  const text = normalizeNumberText(`${skill.usage} ${skill.effect}`);
+  return /(?:所持金を\s*)?\d+\s*G\s*消費/.test(text);
+}
+
 function addStatus(list: { label: string; value: string; max: string }[], existing: Set<string>, label: string, value: number | string, max: number | string) {
   if (!label || existing.has(label)) return;
   list.push({ label, value: String(value), max: String(max) });
@@ -48,6 +57,10 @@ export function buildStatus(sheet: ParsedSheet, custom: CustomCommandMap) {
     const engraved = sheet.skills.find((s) => s.name === "エングレイブド");
     const calculated = engraved ? engraved.level * 3 + 1 : 0;
     addStatus(extras, existing, "EP", epFromSheet || calculated, 0);
+  }
+
+  if (sheet.skills.some(consumesGold)) {
+    addStatus(extras, existing, "所持金", safeNumber(raw.moneyTotal ?? raw.money, 0), 0);
   }
 
   const unitStatusNum = safeNumber(raw.unitStatusNum, 0);
