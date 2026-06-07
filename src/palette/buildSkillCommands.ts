@@ -10,10 +10,37 @@ function displayCost(skill: YtSkill): string {
   return skill.cost;
 }
 
+function timingPhrase(timing: string): string {
+  const t = timing.trim();
+  if (/^《.+》$/.test(t)) return `${t}と同時に`;
+  if (/セットアップ/.test(t)) return "セットアッププロセスで";
+  if (/イニシアチブ/.test(t)) return "イニシアチブプロセスで";
+  if (/ムーブ/.test(t)) return "ムーブアクションで";
+  if (/マイナー/.test(t)) return "マイナーアクションで";
+  if (/メジャー/.test(t)) return "メジャーアクションで";
+  if (/クリンナップ/.test(t)) return "クリンナッププロセスで";
+  if (/フリー/.test(t)) return "フリーアクションで";
+  if (/戦闘不能/.test(t)) return "戦闘不能と同時に";
+  if (/アイテム/.test(t)) return "プリプレイで";
+  if (/リアクション/.test(t)) return "リアクションで";
+  if (/レガシー/.test(t)) return "レガシーアクションで";
+  if (/効果参照/.test(t)) return "";
+  if (/判定.*直前|判定.*直後|DR.*直前|DR.*直後|ダメージロール.*直前|ダメージロール.*直後/.test(t)) return `${t}に`;
+  return t ? `${t}に` : "";
+}
+
+function extraInfo(skill: YtSkill): string {
+  const parts: string[] = [];
+  if (hasText(skill.judge) && !/自動成功|なし/.test(skill.judge)) parts.push(`判定：${skill.judge}`);
+  if (hasText(skill.target) && skill.target !== "自身") parts.push(`対象：${skill.target}`);
+  if (hasText(skill.range)) parts.push(`射程：${skill.range}`);
+  if (hasText(skill.usage)) parts.push(`使用条件：${skill.usage}`);
+  return parts.length ? ` ${parts.join(" ")}` : "";
+}
+
 function effectText(skill: YtSkill): string {
   const effect = hasText(skill.effect) ? skill.effect : "";
-  const usage = hasText(skill.usage) ? ` 使用条件：${skill.usage}` : "";
-  return `${effect}${usage}`.replace(/\s+/g, " ").trim();
+  return `${effect}${extraInfo(skill)}`.replace(/\s+/g, " ").trim();
 }
 
 function passiveLine(skill: YtSkill): string {
@@ -68,8 +95,8 @@ export function skillToLines(skill: YtSkill, custom: CustomCommandMap) {
     lines.push(passiveLine(skill));
     if (isToggleSkill(skill)) lines.push(`:${skill.name}=1`, `:${skill.name}=0`);
   } else {
-    const timing = skill.timing || "任意";
-    lines.push(`${timing}に《${skill.name}》${skill.level}を使用。${body}`.trim());
+    const prefix = timingPhrase(skill.timing);
+    lines.push(`${prefix}《${skill.name}》${skill.level}を使用。${body}`.trim());
     if (c?.use?.length) lines.push(...c.use);
     else lines.push(...resourceCommands(skill));
     const judge = judgementCommand(skill);
