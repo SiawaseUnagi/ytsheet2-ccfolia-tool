@@ -14,8 +14,8 @@ function sec() {
     ["判定直前", []],
     ["判定直後", []],
     ["クリンナッププロセス", []],
-    ["装備効果", []],
     ["効果参照", []],
+    ["装備効果", []],
     ["シーン終了時リセット", []],
     ["シナリオ開始時リセット", []],
     ["攻撃", []],
@@ -83,6 +83,11 @@ function weaponAttackLines(weapons: WeaponData[]): string[] {
   ]);
 }
 
+function pushSkillLines(map: Map<string, string[]>, target: string, lines: string[]) {
+  if (target === "パッシブ") map.get(target)?.push(...lines);
+  else map.get(target)?.push(...lines, "");
+}
+
 export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): { text: string; warnings: string[] } {
   const s = sec();
   const warnings = [...sheet.warnings];
@@ -90,7 +95,7 @@ export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): { te
   for (const sk of sheet.skills) {
     const target = mapTiming(sk.timing);
     const out = skillToLines(sk, custom);
-    s.get(target)?.push(...out.lines, "");
+    pushSkillLines(s, target, out.lines);
     for (const r of out.resets) s.get(r.scope === "scene" ? "シーン終了時リセット" : "シナリオ開始時リセット")?.push(r.line);
     if (!out.usageLimit && looksLikeUnreadLimitedUse(sk.usage)) warnings.push(`《${sk.name}》：使用制限を読み取れませんでした。`);
   }
@@ -114,7 +119,7 @@ export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): { te
     "{呪歌D}D+{呪歌判定}+{呪歌判定修正}+{判定BD}D>=0 呪歌判定",
     "{錬金術D}D+{錬金術判定}+{錬金術判定修正}+{判定BD}D>=0 錬金術判定",
   );
-  const order = ["リソース操作", "セットアッププロセス", "イニシアチブプロセス", "ムーブアクション", "マイナーアクション", "メジャーアクション", "DR直前", "DR直後", "判定直前", "判定直後", "クリンナッププロセス", "装備効果", "効果参照", "シーン終了時リセット", "シナリオ開始時リセット", "攻撃", "判定", "パッシブ"];
+  const order = ["リソース操作", "セットアッププロセス", "イニシアチブプロセス", "ムーブアクション", "マイナーアクション", "メジャーアクション", "DR直前", "DR直後", "判定直前", "判定直後", "クリンナッププロセス", "効果参照", "装備効果", "シーン終了時リセット", "シナリオ開始時リセット", "攻撃", "判定", "パッシブ"];
   const text = order.map((k) => `### ■${k}\n${(s.get(k) ?? []).join("\n")}`.trimEnd()).join("\n\n");
   return { text, warnings };
 }
