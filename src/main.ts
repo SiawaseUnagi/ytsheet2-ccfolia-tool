@@ -22,13 +22,14 @@ app.innerHTML = `<main style="max-width:1000px;margin:auto;padding:16px;font-fam
 <h3>警告</h3><pre id='warn' style='white-space:pre-wrap'></pre>
 <h3>ココフォリアJSON</h3><textarea id='outjson' rows='16' style='width:100%;box-sizing:border-box'></textarea>
 <h3>チャットパレット編集用：変数一覧</h3><textarea id='vars' rows='12' style='width:100%;box-sizing:border-box'></textarea>
-<h3>チャットパレット(編集可)</h3><textarea id='palette' rows='20' style='width:100%;box-sizing:border-box'></textarea>
+<h3>チャットパレット（ここを編集してからコピーすると反映）</h3><textarea id='palette' rows='20' style='width:100%;box-sizing:border-box'></textarea>
 </main>`;
 
 let latest = "";
 let latestVars = "";
 
 type NamedValue = { label?: unknown; value?: unknown; max?: unknown };
+type CcfoliaCharacterJson = { data?: { commands?: string; [key: string]: unknown }; [key: string]: unknown };
 
 function labelOf(item: unknown): string | null {
   const label = (item as NamedValue)?.label;
@@ -75,6 +76,22 @@ async function loadRawSheet(): Promise<Record<string, unknown>> {
   return await fetchYtsheetJson(url) as Record<string, unknown>;
 }
 
+function refreshOutputJsonFromEditedPalette(): string {
+  const warn = document.getElementById("warn") as HTMLElement;
+  const out = (document.getElementById("outjson") as HTMLTextAreaElement).value.trim() || latest;
+  const palette = (document.getElementById("palette") as HTMLTextAreaElement).value;
+  if (!out) throw new Error("先に出力してください。");
+
+  const parsed = JSON.parse(out) as CcfoliaCharacterJson;
+  if (!parsed.data || typeof parsed.data !== "object") throw new Error("ココフォリアJSONの data が見つかりません。");
+
+  parsed.data.commands = buildCommands(palette);
+  latest = JSON.stringify(parsed, null, 2);
+  (document.getElementById("outjson") as HTMLTextAreaElement).value = latest;
+  warn.textContent = "チャットパレットの編集内容をココフォリアJSONに反映しました。";
+  return latest;
+}
+
 (document.getElementById("gen") as HTMLButtonElement).onclick = async () => {
   const warn = document.getElementById("warn") as HTMLElement;
   warn.textContent = "出力中...";
@@ -100,7 +117,12 @@ async function loadRawSheet(): Promise<Record<string, unknown>> {
 };
 
 (document.getElementById("copy") as HTMLButtonElement).onclick = async () => {
-  await navigator.clipboard.writeText(latest);
+  try {
+    const text = refreshOutputJsonFromEditedPalette();
+    await navigator.clipboard.writeText(text);
+  } catch (e) {
+    (document.getElementById("warn") as HTMLElement).textContent = `コピー失敗: ${String(e)}`;
+  }
 };
 
 (document.getElementById("copyVars") as HTMLButtonElement).onclick = async () => {
