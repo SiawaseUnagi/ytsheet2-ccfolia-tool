@@ -32,7 +32,7 @@ function timingPhrase(timing: string): string {
 function extraInfo(skill: YtSkill): string {
   const parts: string[] = [];
   if (hasText(skill.judge) && !/自動成功|なし/.test(skill.judge)) parts.push(`判定：${skill.judge}`);
-  if (hasText(skill.target) && skill.target !== "自身") parts.push(`対象：${skill.target}`);
+  if (shouldShowTargetInput(skill)) parts.push(`対象：${skill.target}`);
   if (hasText(skill.range)) parts.push(`射程：${skill.range}`);
   if (hasText(skill.usage)) parts.push(`使用条件：${skill.usage}`);
   return parts.length ? ` ${parts.join(" ")}` : "";
@@ -49,6 +49,12 @@ function passiveLine(skill: YtSkill): string {
 
 function normalizeNumberText(value: string): string {
   return value.replace(/,/g, "").replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
+}
+
+function shouldShowTargetInput(skill: YtSkill): boolean {
+  const target = skill.target.trim();
+  if (!hasText(target)) return false;
+  return !/^(自身|なし|無し|無|―|-)$/.test(target);
 }
 
 function resourceCommands(skill: YtSkill): string[] {
@@ -109,6 +115,7 @@ export function skillToLines(skill: YtSkill, custom: CustomCommandMap) {
     lines.push(`${prefix}《${skill.name}》${skill.level}を使用。${body}`.trim());
     if (c?.use?.length) lines.push(...c.use);
     else lines.push(...resourceCommands(skill));
+    if (shouldShowTargetInput(skill)) lines.push("対象：");
     const judge = judgementCommand(skill);
     if (judge) lines.push(judge);
     if (isToggleSkill(skill)) {
