@@ -1,5 +1,6 @@
 import { buildCharacterJson } from "./ccfolia/buildCharacterJson";
 import { buildCommands } from "./ccfolia/buildCommands";
+import { buildMemo } from "./ccfolia/buildMemo";
 import { buildParams } from "./ccfolia/buildParams";
 import { buildStatus } from "./ccfolia/buildStatus";
 import { buildPalette } from "./palette/buildPalette";
@@ -104,7 +105,8 @@ function refreshOutputJsonFromEditedPalette(): string {
     const { text, warnings } = buildPalette(sheet, custom);
     const status = buildStatus(sheet, custom);
     const params = buildParams(sheet);
-    const cc = buildCharacterJson(sheet.name, url, status, params, buildCommands(text), sheet.initiative);
+    const memo = buildMemo(raw);
+    const cc = buildCharacterJson(sheet.name, url, status, params, buildCommands(text), sheet.initiative, memo);
     latest = JSON.stringify(cc, null, 2);
     latestVars = buildVariableText(status, params);
     (document.getElementById("outjson") as HTMLTextAreaElement).value = latest;
