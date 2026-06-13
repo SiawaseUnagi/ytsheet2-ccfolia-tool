@@ -27,6 +27,24 @@ app.innerHTML = `<main style="max-width:1000px;margin:auto;padding:16px;font-fam
 <h3>パラメータ（編集してからコピーすると反映：ラベル / 値）</h3><textarea id='paramsEdit' rows='12' style='width:100%;box-sizing:border-box'></textarea>
 <h3>チャットパレット編集用：変数一覧</h3><textarea id='vars' rows='12' style='width:100%;box-sizing:border-box'></textarea>
 <h3>チャットパレット（ここを編集してからコピーすると反映）</h3><textarea id='palette' rows='20' style='width:100%;box-sizing:border-box'></textarea>
+<section style='margin-top:24px;padding:16px;border:1px solid #ddd;border-radius:8px;background:#fafafa;line-height:1.7'>
+  <h2 style='margin-top:0'>使い方</h2>
+  <ol>
+    <li>ゆとシートⅡのURLを入力して、<strong>出力</strong>を押します。</li>
+    <li>必要に応じて、ステータス・パラメータ・チャットパレット欄を編集します。</li>
+    <li><strong>ココフォリアJSONをコピー</strong>を押すと、編集内容を反映したJSONがコピーされます。</li>
+    <li>ココフォリアの盤面で右クリックし、<strong>クリップボードから貼り付け</strong>でキャラクターコマを作成します。</li>
+  </ol>
+  <h3>編集欄について</h3>
+  <p>ステータス欄は「ラベル 現在値 最大値」、パラメータ欄は「ラベル 値」の形で編集できます。区切りはタブ、半角スペース、カンマ、スラッシュ、= が使えます。</p>
+  <pre style='white-space:pre-wrap;background:#fff;padding:8px;border-radius:6px'>HPP 2 0
+スマッシュ 0 0
+CL 3</pre>
+  <p>行を消すとその項目は削除され、行を追加すると項目を追加できます。並び替えたい場合は、行の順番を入れ替えてください。</p>
+  <h3>注意</h3>
+  <p>このツールは、ゆとシートの内容からココフォリア用のコマを作る補助ツールです。スキル効果の条件付き補正までは完全自動では処理しません。必要な補正は、チャットパレット編集用の変数一覧を見ながら手動で足してください。</p>
+  <p>チャットパレットを編集した後は、必ず<strong>ココフォリアJSONをコピー</strong>を押してください。表示されているJSONにも編集内容が反映されます。</p>
+</section>
 </main>`;
 
 let latest = "";
