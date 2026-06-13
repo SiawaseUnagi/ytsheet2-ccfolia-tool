@@ -7,6 +7,25 @@ const ALIASES: Record<string, string> = {
   魔防: "魔法防御力",
 };
 
+const COMMON_CONSUMABLES = [
+  "HPP",
+  "MPP",
+  "HHPP",
+  "HMPP",
+  "EXHPP",
+  "EXMPP",
+  "GHPP",
+  "GMPP",
+  "毒消し",
+  "耐毒符",
+  "にく",
+  "野菜",
+  "果実",
+  "強心丹",
+  "万能薬",
+  "蘇生薬",
+];
+
 function hasSkill(sheet: ParsedSheet, name: string): boolean {
   return sheet.skills.some((s) => s.name === name);
 }
@@ -31,18 +50,45 @@ function addStatus(list: { label: string; value: string; max: string }[], existi
   existing.add(label);
 }
 
+function itemText(raw: Record<string, unknown>): string {
+  return normalizeNumberText(String(raw.items ?? ""))
+    .replace(/&lt;br&gt;/g, "\n")
+    .replace(/<br\s*\/?>/g, "\n");
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function countFromLine(line: string): number {
+  const count = line.match(/[＊*×xX]\s*(\d+)/)?.[1]
+    ?? line.match(/@\[[^\d]*(\d+)/)?.[1]
+    ?? line.match(/[（(]\s*(\d+)\s*[）)]/)?.[1];
+  return count ? safeNumber(count, 1) : 1;
+}
+
 function itemCount(raw: Record<string, unknown>, label: string): number {
-  const text = String(raw.items ?? "").replace(/&lt;br&gt;/g, "\n").replace(/<br\s*\/?>/g, "\n");
-  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const patterns = [
-    new RegExp(`${escaped}\\s*[＊*×xX]\\s*(\\d+)`),
-    new RegExp(`${escaped}[^@\\n]*@\\[[^\\d]*(\\d+)`),
-  ];
-  for (const pattern of patterns) {
-    const hit = text.match(pattern);
-    if (hit) return safeNumber(hit[1], 0);
+  const escaped = escapeRegExp(label);
+  const pattern = new RegExp(`(^|[\\s　,，、/])${escaped}(?=$|[\\s　＊*×xX@,，、/（(])`);
+  let total = 0;
+  for (const line of itemText(raw).split(/\r?\n/)) {
+    if (pattern.test(line)) total += countFromLine(line);
   }
-  return 0;
+  return total;
+}
+
+function detectRiryokufu(raw: Record<string, unknown>): { label: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const line of itemText(raw).split(/\r?\n/)) {
+    const matches = [...line.matchAll(/理力符\s*[〈<《(（]\s*([^〉>》)）\s]+)\s*[〉>》)）]/g)];
+    for (const match of matches) {
+      const attr = match[1]?.trim();
+      if (!attr) continue;
+      const label = `理力符〈${attr}〉`;
+      counts.set(label, (counts.get(label) ?? 0) + countFromLine(line));
+    }
+  }
+  return [...counts.entries()].map(([label, count]) => ({ label, count }));
 }
 
 export function buildStatus(sheet: ParsedSheet, custom: CustomCommandMap) {
@@ -66,8 +112,11 @@ export function buildStatus(sheet: ParsedSheet, custom: CustomCommandMap) {
   const extras: { label: string; value: string; max: string }[] = [];
   const raw = sheet.raw;
 
-  for (const label of ["HPP", "MPP", "HHPP", "HMPP", "毒消し"]) {
+  for (const label of COMMON_CONSUMABLES) {
     addStatus(extras, existing, label, itemCount(raw, label), 0);
+  }
+  for (const item of detectRiryokufu(raw)) {
+    addStatus(extras, existing, item.label, item.count, 0);
   }
 
   if (hasSkill(sheet, "エングレイブド")) {
