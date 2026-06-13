@@ -3,6 +3,7 @@ import { buildCommands } from "./ccfolia/buildCommands";
 import { buildMemo } from "./ccfolia/buildMemo";
 import { buildParams } from "./ccfolia/buildParams";
 import { buildStatus } from "./ccfolia/buildStatus";
+import { DEFAULT_CONSUMABLES, isKnownConsumableLabel } from "./items/consumables";
 import { buildPalette } from "./palette/buildPalette";
 import { fetchYtsheetJson } from "./ytsheet/fetchYtsheet";
 import { parseYtsheet } from "./ytsheet/parseYtsheet";
@@ -30,9 +31,13 @@ app.innerHTML = `<main style="max-width:1000px;margin:auto;padding:16px;font-fam
 
 let latest = "";
 let latestVars = "";
+let latestSkillNames: string[] = [];
 
 type NamedValue = { label?: unknown; value?: unknown; max?: unknown };
 type CcfoliaCharacterJson = { data?: { commands?: string; status?: unknown[]; params?: unknown[]; color?: string; [key: string]: unknown }; [key: string]: unknown };
+
+const BASE_STATUS_LABELS = ["HP", "MP", "フェイト", "移動力", "物理防御力", "魔法防御力", "携帯可能重量", "判定BD", "命中BD", "回避BD", "ダメBD", "ダメバフ", "EP", "所持金"];
+const DEFAULT_CONSUMABLE_LABELS = DEFAULT_CONSUMABLES.map((item) => item.label);
 
 function labelOf(item: unknown): string | null {
   const label = (item as NamedValue)?.label;
@@ -43,17 +48,24 @@ function unique(values: string[]): string[] {
   return [...new Set(values.filter(Boolean))];
 }
 
-function buildVariableText(status: unknown[], params: unknown[]): string {
+function buildVariableText(status: unknown[], params: unknown[], skillNames: string[] = []): string {
   const statusLabels = unique(status.map(labelOf).filter((v): v is string => !!v));
   const paramLabels = unique(params.map(labelOf).filter((v): v is string => !!v));
-  const skillLike = statusLabels.filter((label) => !["HP", "MP", "フェイト", "移動力", "物理防御力", "魔法防御力", "携帯可能重量", "判定BD", "命中BD", "回避BD", "ダメBD", "ダメバフ", "EP", "所持金", "HPP", "MPP", "HHPP", "HMPP", "毒消し"].includes(label));
+  const consumableLabels = statusLabels.filter(isKnownConsumableLabel);
+  const extraStatusFlags = statusLabels.filter((label) => !BASE_STATUS_LABELS.includes(label) && !isKnownConsumableLabel(label));
+  const allSkillFlags = unique([...skillNames, ...extraStatusFlags]);
+  const optionalConsumableLabels = consumableLabels.filter((label) => !DEFAULT_CONSUMABLE_LABELS.includes(label));
 
   const lines: string[] = [];
   lines.push("### ■よく使う補正");
   lines.push("{判定BD}D", "{命中BD}D", "{回避BD}D", "{ダメBD}D", "{ダメバフ}");
-  if (skillLike.length) {
-    lines.push("", "### ■スキル・フラグ");
-    for (const label of skillLike) lines.push(`{${label}}`, `{${label}}D`);
+  if (allSkillFlags.length) {
+    lines.push("", "### ■スキル・フラグ候補");
+    for (const label of allSkillFlags) lines.push(`{${label}}`, `{${label}}D`, `:${label}=1`, `:${label}=0`);
+  }
+  if (optionalConsumableLabels.length) {
+    lines.push("", "### ■消耗品コマンド");
+    for (const label of optionalConsumableLabels) lines.push(`:${label}-1`);
   }
   lines.push("", "### ■基本ステータス");
   for (const label of statusLabels) lines.push(`{${label}}`);
@@ -156,7 +168,7 @@ function refreshOutputJsonFromEditedFields(): string {
   parsed.data.status = parseStatusText((document.getElementById("statusEdit") as HTMLTextAreaElement).value);
   parsed.data.params = parseParamsText((document.getElementById("paramsEdit") as HTMLTextAreaElement).value);
   latest = JSON.stringify(parsed, null, 2);
-  latestVars = buildVariableText(parsed.data.status, parsed.data.params);
+  latestVars = buildVariableText(parsed.data.status, parsed.data.params, latestSkillNames);
   (document.getElementById("outjson") as HTMLTextAreaElement).value = latest;
   (document.getElementById("vars") as HTMLTextAreaElement).value = latestVars;
   warn.textContent = "編集内容をココフォリアJSONに反映しました。";
@@ -171,6 +183,7 @@ function refreshOutputJsonFromEditedFields(): string {
     const urlInput = (document.getElementById("url") as HTMLInputElement).value.trim();
     const url = urlInput || String(raw.sheetURL ?? "");
     const sheet = parseYtsheet(raw, url);
+    latestSkillNames = unique(sheet.skills.map((skill) => skill.name));
     const custom = {};
     const { text, warnings } = buildPalette(sheet, custom);
     const status = buildStatus(sheet, custom);
@@ -179,7 +192,7 @@ function refreshOutputJsonFromEditedFields(): string {
     const color = extractColor(raw);
     const cc = buildCharacterJson(sheet.name, url, status, params, buildCommands(text), sheet.initiative, memo, color);
     latest = JSON.stringify(cc, null, 2);
-    latestVars = buildVariableText(status, params);
+    latestVars = buildVariableText(status, params, latestSkillNames);
     (document.getElementById("outjson") as HTMLTextAreaElement).value = latest;
     (document.getElementById("statusEdit") as HTMLTextAreaElement).value = statusToText(status);
     (document.getElementById("paramsEdit") as HTMLTextAreaElement).value = paramsToText(params);
@@ -204,6 +217,7 @@ function refreshOutputJsonFromEditedFields(): string {
   latestVars = buildVariableText(
     parseStatusText((document.getElementById("statusEdit") as HTMLTextAreaElement).value),
     parseParamsText((document.getElementById("paramsEdit") as HTMLTextAreaElement).value),
+    latestSkillNames,
   );
   (document.getElementById("vars") as HTMLTextAreaElement).value = latestVars;
   await navigator.clipboard.writeText(latestVars);
