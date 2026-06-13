@@ -10,7 +10,7 @@ export type YtSkill = {
   effect: string;
 };
 
-export type WeaponData = { name: string; hit: number; hitDice: number; atk: number; atkDice: number };
+export type WeaponData = { name: string; hit: number; hitDice: number; atk: number; atkDice: number; weaponAtk: number };
 
 export type ParsedSheet = {
   raw: Record<string, unknown>;
