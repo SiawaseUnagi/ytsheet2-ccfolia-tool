@@ -87,7 +87,6 @@ export function buildStatus(sheet: ParsedSheet, custom: CustomCommandMap) {
   for (const skill of sheet.skills) {
     const limit = detectUsageLimit(skill);
     if (limit) addStatus(extras, existing, skill.name, limit.max, limit.max);
-    else addStatus(extras, existing, skill.name, 0, 0);
     if (isToggleSkill(skill)) addStatus(extras, existing, skill.name, 0, 0);
   }
 
