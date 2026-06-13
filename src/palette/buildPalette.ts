@@ -1,4 +1,4 @@
-import { DEFAULT_CONSUMABLES, consumableCount } from "../items/consumables";
+import { DEFAULT_CONSUMABLES } from "../items/consumables";
 import type { CustomCommandMap, ParsedSheet, YtSkill } from "../ytsheet/types";
 import { skillToLines } from "./buildSkillCommands";
 
@@ -91,13 +91,12 @@ function weaponAttackLines(): string[] {
   ];
 }
 
-function defaultConsumableLines(sheet: ParsedSheet): string[] {
-  const lines: string[] = [];
-  for (const item of DEFAULT_CONSUMABLES) {
-    if (consumableCount(sheet.raw, item) <= 0) continue;
-    lines.push(`マイナーアクションで${item.label}を使用。`, `:${item.label}-1`, "");
-  }
-  return lines;
+function defaultConsumableLines(): string[] {
+  return DEFAULT_CONSUMABLES.flatMap((item) => [
+    `マイナーアクションで${item.label}を使用。`,
+    `:${item.label}-1`,
+    "",
+  ]);
 }
 
 function pushSkillLines(map: Map<string, string[]>, target: string, lines: string[]) {
@@ -120,7 +119,7 @@ function pushResets(map: Map<string, string[]>, resets: SkillOutput["resets"]) {
 export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): { text: string; warnings: string[] } {
   const s = sec();
   const warnings = [...sheet.warnings];
-  s.get("マイナー")?.push(...defaultConsumableLines(sheet));
+  s.get("マイナー")?.push(...defaultConsumableLines());
   s.get("メジャー")?.push(...weaponAttackLines());
 
   const dependent = new Map<string, SkillOutput[]>();
