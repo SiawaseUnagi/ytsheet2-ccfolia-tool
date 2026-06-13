@@ -77,6 +77,7 @@ function parseWeapons(raw: Record<string, unknown>): WeaponData[] {
         hitDice: safeNumber(o.hitDice, 2),
         atk: safeNumber(o.atk, 0),
         atkDice: safeNumber(o.atkDice, 2),
+        weaponAtk: safeNumber(o.weaponAtk ?? o.attack ?? o.atk, 0),
       };
     }).filter((w) => w.name && isWeaponLike(normalizeText(String((items.find((x) => (x as Record<string, unknown>).name === w.name) as Record<string, unknown> | undefined)?.type ?? ""))));
   }
@@ -90,6 +91,7 @@ function parseWeapons(raw: Record<string, unknown>): WeaponData[] {
     hitDice: pick(raw, ["battleDiceAcc"], 2),
     atk: pick(raw, ["battleTotalAtkR", "battleTotalAtk"], 0),
     atkDice: pick(raw, ["battleDiceAtk"], 2),
+    weaponAtk: pick(raw, ["armamentHandRAtk", "weaponAtkR", "handRAtk"], 0),
   });
   const left = getText(raw, "armamentHandLName");
   const leftType = getText(raw, "armamentHandLType");
@@ -99,6 +101,7 @@ function parseWeapons(raw: Record<string, unknown>): WeaponData[] {
     hitDice: pick(raw, ["battleDiceAcc"], 2),
     atk: pick(raw, ["battleTotalAtkL", "battleTotalAtk"], 0),
     atkDice: pick(raw, ["battleDiceAtk"], 2),
+    weaponAtk: pick(raw, ["armamentHandLAtk", "weaponAtkL", "handLAtk"], 0),
   });
   return weapons;
 }
@@ -125,7 +128,6 @@ export function parseYtsheet(raw: Record<string, unknown>, baseUrl: string): Par
     weapons: parseWeapons(raw),
     warnings,
   };
-  if (parsed.weapons.length === 0) warnings.push("武器データを読み取れなかったため、汎用の攻撃雛形のみ出力しました。");
   if (parsed.skills.length === 0) warnings.push("スキル一覧を読み取れませんでした。");
   return parsed;
 }
