@@ -58,11 +58,8 @@ export function buildParams(sheet: ParsedSheet) {
     { label: "攻撃力D", value: String(pick(raw, ["battleDiceAtk"], 2)) },
   );
 
-  for (const w of sheet.weapons) p.push(
-    { label: `${w.name}_命中判定`, value: String(w.hit) },
-    { label: `${w.name}_命中D`, value: String(w.hitDice) },
-    { label: `${w.name}_攻撃力`, value: String(w.atk) },
-    { label: `${w.name}_攻撃力D`, value: String(w.atkDice) },
-  );
+  for (const w of sheet.weapons) {
+    p.push({ label: `${w.name}_武器攻撃力`, value: String(w.weaponAtk) });
+  }
   return p;
 }
