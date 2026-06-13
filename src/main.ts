@@ -41,6 +41,41 @@ function unique(values: string[]): string[] {
   return [...new Set(values.filter(Boolean))];
 }
 
+function toNumber(value: unknown): number | null {
+  const n = Number(String(value ?? "").trim());
+  return Number.isFinite(n) ? n : null;
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+  const hue = ((h % 360) + 360) % 360;
+  const sat = Math.max(0, Math.min(100, s)) / 100;
+  const light = Math.max(0, Math.min(100, l)) / 100;
+  const c = (1 - Math.abs(2 * light - 1)) * sat;
+  const x = c * (1 - Math.abs(((hue / 60) % 2) - 1));
+  const m = light - c / 2;
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  if (hue < 60) [r, g, b] = [c, x, 0];
+  else if (hue < 120) [r, g, b] = [x, c, 0];
+  else if (hue < 180) [r, g, b] = [0, c, x];
+  else if (hue < 240) [r, g, b] = [0, x, c];
+  else if (hue < 300) [r, g, b] = [x, 0, c];
+  else [r, g, b] = [c, 0, x];
+  return [r, g, b]
+    .map((v) => Math.round((v + m) * 255).toString(16).padStart(2, "0"))
+    .join("")
+    .replace(/^/, "#");
+}
+
+function buildSpeakerColor(raw: Record<string, unknown>): string | undefined {
+  const h = toNumber(raw.colorHeadBgH);
+  const s = toNumber(raw.colorHeadBgS);
+  const l = toNumber(raw.colorHeadBgL);
+  if (h === null || s === null || l === null) return undefined;
+  return hslToHex(h, s, l);
+}
+
 function buildVariableText(status: unknown[], params: unknown[]): string {
   const statusLabels = unique(status.map(labelOf).filter((v): v is string => !!v));
   const paramLabels = unique(params.map(labelOf).filter((v): v is string => !!v));
@@ -106,7 +141,8 @@ function refreshOutputJsonFromEditedPalette(): string {
     const status = buildStatus(sheet, custom);
     const params = buildParams(sheet);
     const memo = buildMemo(raw);
-    const cc = buildCharacterJson(sheet.name, url, status, params, buildCommands(text), sheet.initiative, memo);
+    const color = buildSpeakerColor(raw);
+    const cc = buildCharacterJson(sheet.name, url, status, params, buildCommands(text), sheet.initiative, memo, color);
     latest = JSON.stringify(cc, null, 2);
     latestVars = buildVariableText(status, params);
     (document.getElementById("outjson") as HTMLTextAreaElement).value = latest;
