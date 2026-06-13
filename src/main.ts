@@ -97,16 +97,22 @@ function paramsToText(params: unknown[]): string {
   }).join("\n");
 }
 
+function splitEditableLine(line: string): string[] {
+  if (line.includes("\t")) return line.split("\t");
+  if (/[=＝,，/]/.test(line)) return line.split(/\s*[=＝,，/]\s*/);
+  return line.split(/\s+/);
+}
+
 function parseStatusText(text: string) {
   return text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).map((line) => {
-    const parts = line.includes("\t") ? line.split("\t") : line.split(/\s*[,，/]\s*/);
+    const parts = splitEditableLine(line);
     return { label: parts[0]?.trim() ?? "", value: String(parts[1] ?? "0").trim(), max: String(parts[2] ?? "0").trim() };
   }).filter((s) => s.label);
 }
 
 function parseParamsText(text: string) {
   return text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).map((line) => {
-    const parts = line.includes("\t") ? line.split("\t") : line.split(/\s*[=＝,，/]\s*/);
+    const parts = splitEditableLine(line);
     return { label: parts[0]?.trim() ?? "", value: String(parts[1] ?? "0").trim() };
   }).filter((p) => p.label);
 }
