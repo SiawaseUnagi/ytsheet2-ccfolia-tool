@@ -31,6 +31,20 @@ function addStatus(list: { label: string; value: string; max: string }[], existi
   existing.add(label);
 }
 
+function itemCount(raw: Record<string, unknown>, label: string): number {
+  const text = String(raw.items ?? "").replace(/&lt;br&gt;/g, "\n").replace(/<br\s*\/?>/g, "\n");
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const patterns = [
+    new RegExp(`${escaped}\\s*[＊*×xX]\\s*(\\d+)`),
+    new RegExp(`${escaped}[^@\\n]*@\\[[^\\d]*(\\d+)`),
+  ];
+  for (const pattern of patterns) {
+    const hit = text.match(pattern);
+    if (hit) return safeNumber(hit[1], 0);
+  }
+  return 0;
+}
+
 export function buildStatus(sheet: ParsedSheet, custom: CustomCommandMap) {
   const carryMax = safeNumber(sheet.raw.weightLimitItems, sheet.carry);
   const fixed = [
@@ -51,6 +65,10 @@ export function buildStatus(sheet: ParsedSheet, custom: CustomCommandMap) {
   const existing = new Set(fixed.map((s) => s.label));
   const extras: { label: string; value: string; max: string }[] = [];
   const raw = sheet.raw;
+
+  for (const label of ["HPP", "MPP", "HHPP", "HMPP", "毒消し"]) {
+    addStatus(extras, existing, label, itemCount(raw, label), 0);
+  }
 
   if (hasSkill(sheet, "エングレイブド")) {
     const epFromSheet = safeNumber(raw.unitStatus1Label === "EP" ? raw.unitStatus1Value : raw.EP, 0);
