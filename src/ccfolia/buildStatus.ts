@@ -1,27 +1,12 @@
 import type { CustomCommandMap, ParsedSheet, YtSkill } from "../ytsheet/types";
 import { detectUsageLimit } from "../palette/detectUsageLimit";
+import { DEFAULT_CONSUMABLES, OPTIONAL_CONSUMABLES, consumableCount, detectRiryokufu } from "../items/consumables";
 import { safeNumber } from "../utils/safeNumber";
 
 const ALIASES: Record<string, string> = {
   物防: "物理防御力",
   魔防: "魔法防御力",
 };
-
-const DEFAULT_CONSUMABLES = ["HPP", "MPP", "HHPP", "HMPP", "毒消し"];
-
-const OPTIONAL_CONSUMABLES = [
-  "EXHPP",
-  "EXMPP",
-  "GHPP",
-  "GMPP",
-  "耐毒符",
-  "にく",
-  "野菜",
-  "果実",
-  "強心丹",
-  "万能薬",
-  "蘇生薬",
-];
 
 function hasSkill(sheet: ParsedSheet, name: string): boolean {
   return sheet.skills.some((s) => s.name === name);
@@ -47,45 +32,6 @@ function addStatus(list: { label: string; value: string; max: string }[], existi
   existing.add(label);
 }
 
-function itemText(raw: Record<string, unknown>): string {
-  return normalizeNumberText(String(raw.items ?? ""))
-    .replace(/&lt;br&gt;/g, "\n")
-    .replace(/<br\s*\/?>/g, "\n");
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function countForLabelInLine(line: string, label: string): number {
-  const escaped = escapeRegExp(label);
-  const match = line.match(new RegExp(`(^|[\\s　,，、/])${escaped}\\s*(?:[＊*×xX]\\s*(\\d+)|[（(]\\s*(\\d+)\\s*[）)])?(?=$|[\\s　@,，、/（(])`));
-  if (!match) return 0;
-  return safeNumber(match[2] ?? match[3], 1);
-}
-
-function itemCount(raw: Record<string, unknown>, label: string): number {
-  let total = 0;
-  for (const line of itemText(raw).split(/\r?\n/)) {
-    total += countForLabelInLine(line, label);
-  }
-  return total;
-}
-
-function detectRiryokufu(raw: Record<string, unknown>): { label: string; count: number }[] {
-  const counts = new Map<string, number>();
-  for (const line of itemText(raw).split(/\r?\n/)) {
-    const matches = [...line.matchAll(/理力符\s*[〈<《(（]\s*([^〉>》)）\s]+)\s*[〉>》)）]/g)];
-    for (const match of matches) {
-      const attr = match[1]?.trim();
-      if (!attr) continue;
-      const label = `理力符〈${attr}〉`;
-      counts.set(label, (counts.get(label) ?? 0) + countForLabelInLine(line, label));
-    }
-  }
-  return [...counts.entries()].map(([label, count]) => ({ label, count }));
-}
-
 export function buildStatus(sheet: ParsedSheet, custom: CustomCommandMap) {
   const carryMax = safeNumber(sheet.raw.weightLimitItems, sheet.carry);
   const fixed = [
@@ -107,12 +53,12 @@ export function buildStatus(sheet: ParsedSheet, custom: CustomCommandMap) {
   const extras: { label: string; value: string; max: string }[] = [];
   const raw = sheet.raw;
 
-  for (const label of DEFAULT_CONSUMABLES) {
-    addStatus(extras, existing, label, itemCount(raw, label), 0);
+  for (const item of DEFAULT_CONSUMABLES) {
+    addStatus(extras, existing, item.label, consumableCount(raw, item), 0);
   }
-  for (const label of OPTIONAL_CONSUMABLES) {
-    const count = itemCount(raw, label);
-    if (count > 0) addStatus(extras, existing, label, count, 0);
+  for (const item of OPTIONAL_CONSUMABLES) {
+    const count = consumableCount(raw, item);
+    if (count > 0) addStatus(extras, existing, item.label, count, 0);
   }
   for (const item of detectRiryokufu(raw)) {
     addStatus(extras, existing, item.label, item.count, 0);
