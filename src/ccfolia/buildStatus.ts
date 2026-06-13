@@ -7,16 +7,13 @@ const ALIASES: Record<string, string> = {
   魔防: "魔法防御力",
 };
 
-const COMMON_CONSUMABLES = [
-  "HPP",
-  "MPP",
-  "HHPP",
-  "HMPP",
+const DEFAULT_CONSUMABLES = ["HPP", "MPP", "HHPP", "HMPP", "毒消し"];
+
+const OPTIONAL_CONSUMABLES = [
   "EXHPP",
   "EXMPP",
   "GHPP",
   "GMPP",
-  "毒消し",
   "耐毒符",
   "にく",
   "野菜",
@@ -112,8 +109,12 @@ export function buildStatus(sheet: ParsedSheet, custom: CustomCommandMap) {
   const extras: { label: string; value: string; max: string }[] = [];
   const raw = sheet.raw;
 
-  for (const label of COMMON_CONSUMABLES) {
+  for (const label of DEFAULT_CONSUMABLES) {
     addStatus(extras, existing, label, itemCount(raw, label), 0);
+  }
+  for (const label of OPTIONAL_CONSUMABLES) {
+    const count = itemCount(raw, label);
+    if (count > 0) addStatus(extras, existing, label, count, 0);
   }
   for (const item of detectRiryokufu(raw)) {
     addStatus(extras, existing, item.label, item.count, 0);
