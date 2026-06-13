@@ -1,4 +1,5 @@
-import type { CustomCommandMap, ParsedSheet, WeaponData, YtSkill } from "../ytsheet/types";
+import { DEFAULT_CONSUMABLES, consumableCount } from "../items/consumables";
+import type { CustomCommandMap, ParsedSheet, YtSkill } from "../ytsheet/types";
 import { skillToLines } from "./buildSkillCommands";
 
 function sec() {
@@ -10,7 +11,7 @@ function sec() {
     ["フリー", []],
     ["ムーブ", ["ムーブアクション放棄。", "ムーブアクションで戦闘移動を行なう。({移動力}m)", "ムーブアクションで全力移動を行なう。({移動力}+5m)", "ムーブアクションで離脱を行なう。"]],
     ["レガシー", []],
-    ["マイナー", ["マイナーアクション放棄。", "マイナーでHPPを使用。", "マイナーでMPPを使用。", "マイナーでHHPPを使用。", "マイナーでHMPPを使用。", "マイナーで毒消しを使用。"]],
+    ["マイナー", ["マイナーアクション放棄。"]],
     ["メジャー", []],
     ["判定の直前", []],
     ["判定の直後", []],
@@ -82,20 +83,21 @@ function collectEquipmentNotes(sheet: ParsedSheet): string[] {
   return lines;
 }
 
-function weaponAttackLines(weapons: WeaponData[]): string[] {
-  if (weapons.length === 0) {
-    return [
-      "メジャーアクションで武器攻撃を行う。",
-      "{命中D}D+{命中判定}+{命中判定修正}+{判定BD}D+{命中BD}D>=0 命中判定",
-      "{攻撃力D}D+{攻撃力}+{ダメBD}D+{ダメバフ} 物理ダメージ",
-    ];
+function weaponAttackLines(): string[] {
+  return [
+    "メジャーアクションで武器攻撃を行う。",
+    "{命中D}D+{命中判定}+{命中判定修正}+{判定BD}D+{命中BD}D>=0 命中判定",
+    "{攻撃力D}D+{攻撃力}+{ダメBD}D+{ダメバフ} 物理ダメージ",
+  ];
+}
+
+function defaultConsumableLines(sheet: ParsedSheet): string[] {
+  const lines: string[] = [];
+  for (const item of DEFAULT_CONSUMABLES) {
+    if (consumableCount(sheet.raw, item) <= 0) continue;
+    lines.push(`マイナーアクションで${item.label}を使用。`, `:${item.label}-1`, "");
   }
-  return weapons.flatMap((w) => [
-    `メジャーアクションで${w.name}による武器攻撃を行う。`,
-    `{${w.name}_命中D}D+{${w.name}_命中判定}+{命中判定修正}+{判定BD}D+{命中BD}D>=0 命中判定　＠${w.name}`,
-    `{${w.name}_攻撃力D}D+{${w.name}_攻撃力}+{ダメBD}D+{ダメバフ} 物理ダメージ　＠${w.name}`,
-    "",
-  ]);
+  return lines;
 }
 
 function pushSkillLines(map: Map<string, string[]>, target: string, lines: string[]) {
@@ -118,7 +120,8 @@ function pushResets(map: Map<string, string[]>, resets: SkillOutput["resets"]) {
 export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): { text: string; warnings: string[] } {
   const s = sec();
   const warnings = [...sheet.warnings];
-  s.get("メジャー")?.push(...weaponAttackLines(sheet.weapons));
+  s.get("マイナー")?.push(...defaultConsumableLines(sheet));
+  s.get("メジャー")?.push(...weaponAttackLines());
 
   const dependent = new Map<string, SkillOutput[]>();
   const independent: SkillOutput[] = [];
