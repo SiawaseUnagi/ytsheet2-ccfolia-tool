@@ -22,6 +22,8 @@ app.innerHTML = `<main style="max-width:1000px;margin:auto;padding:16px;font-fam
 </details>
 <h3>警告</h3><pre id='warn' style='white-space:pre-wrap'></pre>
 <h3>ココフォリアJSON</h3><textarea id='outjson' rows='16' style='width:100%;box-sizing:border-box'></textarea>
+<h3>ステータス（編集してからコピーすると反映：ラベル / 現在値 / 最大値）</h3><textarea id='statusEdit' rows='10' style='width:100%;box-sizing:border-box'></textarea>
+<h3>パラメータ（編集してからコピーすると反映：ラベル / 値）</h3><textarea id='paramsEdit' rows='12' style='width:100%;box-sizing:border-box'></textarea>
 <h3>チャットパレット編集用：変数一覧</h3><textarea id='vars' rows='12' style='width:100%;box-sizing:border-box'></textarea>
 <h3>チャットパレット（ここを編集してからコピーすると反映）</h3><textarea id='palette' rows='20' style='width:100%;box-sizing:border-box'></textarea>
 </main>`;
@@ -30,7 +32,7 @@ let latest = "";
 let latestVars = "";
 
 type NamedValue = { label?: unknown; value?: unknown; max?: unknown };
-type CcfoliaCharacterJson = { data?: { commands?: string; [key: string]: unknown }; [key: string]: unknown };
+type CcfoliaCharacterJson = { data?: { commands?: string; status?: unknown[]; params?: unknown[]; color?: string; [key: string]: unknown }; [key: string]: unknown };
 
 function labelOf(item: unknown): string | null {
   const label = (item as NamedValue)?.label;
@@ -41,45 +43,10 @@ function unique(values: string[]): string[] {
   return [...new Set(values.filter(Boolean))];
 }
 
-function toNumber(value: unknown): number | null {
-  const n = Number(String(value ?? "").trim());
-  return Number.isFinite(n) ? n : null;
-}
-
-function hslToHex(h: number, s: number, l: number): string {
-  const hue = ((h % 360) + 360) % 360;
-  const sat = Math.max(0, Math.min(100, s)) / 100;
-  const light = Math.max(0, Math.min(100, l)) / 100;
-  const c = (1 - Math.abs(2 * light - 1)) * sat;
-  const x = c * (1 - Math.abs(((hue / 60) % 2) - 1));
-  const m = light - c / 2;
-  let r = 0;
-  let g = 0;
-  let b = 0;
-  if (hue < 60) [r, g, b] = [c, x, 0];
-  else if (hue < 120) [r, g, b] = [x, c, 0];
-  else if (hue < 180) [r, g, b] = [0, c, x];
-  else if (hue < 240) [r, g, b] = [0, x, c];
-  else if (hue < 300) [r, g, b] = [x, 0, c];
-  else [r, g, b] = [c, 0, x];
-  return [r, g, b]
-    .map((v) => Math.round((v + m) * 255).toString(16).padStart(2, "0"))
-    .join("")
-    .replace(/^/, "#");
-}
-
-function buildSpeakerColor(raw: Record<string, unknown>): string | undefined {
-  const h = toNumber(raw.colorHeadBgH);
-  const s = toNumber(raw.colorHeadBgS);
-  const l = toNumber(raw.colorHeadBgL);
-  if (h === null || s === null || l === null) return undefined;
-  return hslToHex(h, s, l);
-}
-
 function buildVariableText(status: unknown[], params: unknown[]): string {
   const statusLabels = unique(status.map(labelOf).filter((v): v is string => !!v));
   const paramLabels = unique(params.map(labelOf).filter((v): v is string => !!v));
-  const skillLike = statusLabels.filter((label) => !["HP", "MP", "フェイト", "移動力", "物理防御力", "魔法防御力", "携帯可能重量", "判定BD", "命中BD", "回避BD", "ダメBD", "ダメバフ", "EP", "所持金"].includes(label));
+  const skillLike = statusLabels.filter((label) => !["HP", "MP", "フェイト", "移動力", "物理防御力", "魔法防御力", "携帯可能重量", "判定BD", "命中BD", "回避BD", "ダメBD", "ダメバフ", "EP", "所持金", "HPP", "MPP", "HHPP", "HMPP", "毒消し"].includes(label));
 
   const lines: string[] = [];
   lines.push("### ■よく使う補正");
@@ -104,6 +71,70 @@ function buildVariableText(status: unknown[], params: unknown[]): string {
   return lines.join("\n");
 }
 
+function statusToText(status: unknown[]): string {
+  return status.map((s) => {
+    const item = s as NamedValue;
+    return [item.label ?? "", item.value ?? "0", item.max ?? "0"].join("\t");
+  }).join("\n");
+}
+
+function paramsToText(params: unknown[]): string {
+  return params.map((p) => {
+    const item = p as NamedValue;
+    return [item.label ?? "", item.value ?? "0"].join("\t");
+  }).join("\n");
+}
+
+function parseStatusText(text: string) {
+  return text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).map((line) => {
+    const parts = line.includes("\t") ? line.split("\t") : line.split(/\s*[,，/]\s*/);
+    return { label: parts[0]?.trim() ?? "", value: String(parts[1] ?? "0").trim(), max: String(parts[2] ?? "0").trim() };
+  }).filter((s) => s.label);
+}
+
+function parseParamsText(text: string) {
+  return text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).map((line) => {
+    const parts = line.includes("\t") ? line.split("\t") : line.split(/\s*[=＝,，/]\s*/);
+    return { label: parts[0]?.trim() ?? "", value: String(parts[1] ?? "0").trim() };
+  }).filter((p) => p.label);
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+  s /= 100;
+  l /= 100;
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+  const m = l - c / 2;
+  let r = 0, g = 0, b = 0;
+  if (h < 60) [r, g, b] = [c, x, 0];
+  else if (h < 120) [r, g, b] = [x, c, 0];
+  else if (h < 180) [r, g, b] = [0, c, x];
+  else if (h < 240) [r, g, b] = [0, x, c];
+  else if (h < 300) [r, g, b] = [x, 0, c];
+  else [r, g, b] = [c, 0, x];
+  const toHex = (v: number) => Math.round((v + m) * 255).toString(16).padStart(2, "0");
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+function safeNum(value: unknown, fallback = 0): number {
+  const n = Number(String(value ?? "").replace(/,/g, ""));
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function extractColor(raw: Record<string, unknown>): string | undefined {
+  const colorKeys = Object.keys(raw).filter((key) => /color|colour|palette|chat/i.test(key));
+  for (const key of colorKeys) {
+    const value = String(raw[key] ?? "");
+    const hit = value.match(/#[0-9a-fA-F]{6}/);
+    if (hit) return hit[0];
+  }
+  const h = safeNum(raw.colorHeadBgH, NaN);
+  const s = safeNum(raw.colorHeadBgS, NaN);
+  const l = safeNum(raw.colorHeadBgL, NaN);
+  if (Number.isFinite(h) && Number.isFinite(s) && Number.isFinite(l)) return hslToHex(((h % 360) + 360) % 360, s, l);
+  return undefined;
+}
+
 async function loadRawSheet(): Promise<Record<string, unknown>> {
   const manual = (document.getElementById("json") as HTMLTextAreaElement).value.trim();
   if (manual) return JSON.parse(manual) as Record<string, unknown>;
@@ -112,7 +143,7 @@ async function loadRawSheet(): Promise<Record<string, unknown>> {
   return await fetchYtsheetJson(url) as Record<string, unknown>;
 }
 
-function refreshOutputJsonFromEditedPalette(): string {
+function refreshOutputJsonFromEditedFields(): string {
   const warn = document.getElementById("warn") as HTMLElement;
   const out = (document.getElementById("outjson") as HTMLTextAreaElement).value.trim() || latest;
   const palette = (document.getElementById("palette") as HTMLTextAreaElement).value;
@@ -122,9 +153,13 @@ function refreshOutputJsonFromEditedPalette(): string {
   if (!parsed.data || typeof parsed.data !== "object") throw new Error("ココフォリアJSONの data が見つかりません。");
 
   parsed.data.commands = buildCommands(palette);
+  parsed.data.status = parseStatusText((document.getElementById("statusEdit") as HTMLTextAreaElement).value);
+  parsed.data.params = parseParamsText((document.getElementById("paramsEdit") as HTMLTextAreaElement).value);
   latest = JSON.stringify(parsed, null, 2);
+  latestVars = buildVariableText(parsed.data.status, parsed.data.params);
   (document.getElementById("outjson") as HTMLTextAreaElement).value = latest;
-  warn.textContent = "チャットパレットの編集内容をココフォリアJSONに反映しました。";
+  (document.getElementById("vars") as HTMLTextAreaElement).value = latestVars;
+  warn.textContent = "編集内容をココフォリアJSONに反映しました。";
   return latest;
 }
 
@@ -141,11 +176,13 @@ function refreshOutputJsonFromEditedPalette(): string {
     const status = buildStatus(sheet, custom);
     const params = buildParams(sheet);
     const memo = buildMemo(raw);
-    const color = buildSpeakerColor(raw);
+    const color = extractColor(raw);
     const cc = buildCharacterJson(sheet.name, url, status, params, buildCommands(text), sheet.initiative, memo, color);
     latest = JSON.stringify(cc, null, 2);
     latestVars = buildVariableText(status, params);
     (document.getElementById("outjson") as HTMLTextAreaElement).value = latest;
+    (document.getElementById("statusEdit") as HTMLTextAreaElement).value = statusToText(status);
+    (document.getElementById("paramsEdit") as HTMLTextAreaElement).value = paramsToText(params);
     (document.getElementById("vars") as HTMLTextAreaElement).value = latestVars;
     (document.getElementById("palette") as HTMLTextAreaElement).value = text;
     warn.textContent = warnings.join("\n") || "OK";
@@ -156,7 +193,7 @@ function refreshOutputJsonFromEditedPalette(): string {
 
 (document.getElementById("copy") as HTMLButtonElement).onclick = async () => {
   try {
-    const text = refreshOutputJsonFromEditedPalette();
+    const text = refreshOutputJsonFromEditedFields();
     await navigator.clipboard.writeText(text);
   } catch (e) {
     (document.getElementById("warn") as HTMLElement).textContent = `コピー失敗: ${String(e)}`;
@@ -164,5 +201,10 @@ function refreshOutputJsonFromEditedPalette(): string {
 };
 
 (document.getElementById("copyVars") as HTMLButtonElement).onclick = async () => {
+  latestVars = buildVariableText(
+    parseStatusText((document.getElementById("statusEdit") as HTMLTextAreaElement).value),
+    parseParamsText((document.getElementById("paramsEdit") as HTMLTextAreaElement).value),
+  );
+  (document.getElementById("vars") as HTMLTextAreaElement).value = latestVars;
   await navigator.clipboard.writeText(latestVars);
 };
