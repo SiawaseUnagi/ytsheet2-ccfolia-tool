@@ -57,19 +57,17 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function countFromLine(line: string): number {
-  const count = line.match(/[＊*×xX]\s*(\d+)/)?.[1]
-    ?? line.match(/@\[[^\d]*(\d+)/)?.[1]
-    ?? line.match(/[（(]\s*(\d+)\s*[）)]/)?.[1];
-  return count ? safeNumber(count, 1) : 1;
+function countForLabelInLine(line: string, label: string): number {
+  const escaped = escapeRegExp(label);
+  const match = line.match(new RegExp(`(^|[\\s　,，、/])${escaped}\\s*(?:[＊*×xX]\\s*(\\d+)|[（(]\\s*(\\d+)\\s*[）)])?(?=$|[\\s　@,，、/（(])`));
+  if (!match) return 0;
+  return safeNumber(match[2] ?? match[3], 1);
 }
 
 function itemCount(raw: Record<string, unknown>, label: string): number {
-  const escaped = escapeRegExp(label);
-  const pattern = new RegExp(`(^|[\\s　,，、/])${escaped}(?=$|[\\s　＊*×xX@,，、/（(])`);
   let total = 0;
   for (const line of itemText(raw).split(/\r?\n/)) {
-    if (pattern.test(line)) total += countFromLine(line);
+    total += countForLabelInLine(line, label);
   }
   return total;
 }
@@ -82,7 +80,7 @@ function detectRiryokufu(raw: Record<string, unknown>): { label: string; count: 
       const attr = match[1]?.trim();
       if (!attr) continue;
       const label = `理力符〈${attr}〉`;
-      counts.set(label, (counts.get(label) ?? 0) + countFromLine(line));
+      counts.set(label, (counts.get(label) ?? 0) + countForLabelInLine(line, label));
     }
   }
   return [...counts.entries()].map(([label, count]) => ({ label, count }));
