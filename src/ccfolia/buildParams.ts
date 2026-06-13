@@ -10,6 +10,8 @@ export function buildParams(sheet: ParsedSheet) {
   const raw = sheet.raw;
   const p: { label: string; value: string }[] = [];
 
+  p.push({ label: "CL", value: String(pick(raw, ["level", "CL", "cl"], 0)) });
+
   const abilityPairs = [
     ["筋力", "rollStr", "rollStrDice"],
     ["器用", "rollDex", "rollDexDice"],
