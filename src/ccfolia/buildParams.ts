@@ -41,7 +41,6 @@ export function buildParams(sheet: ParsedSheet) {
     p.push({ label: `${label}判定ダイス`, value: String(pick(raw, [diceKey], 2)) });
   }
 
-  const strRoll = abilityRolls.get("筋力") ?? (sheet.abilities["筋力"] ?? 0);
   const dexRoll = abilityRolls.get("器用") ?? (sheet.abilities["器用"] ?? 0);
   const agiRoll = abilityRolls.get("敏捷") ?? (sheet.abilities["敏捷"] ?? 0);
   const intRoll = abilityRolls.get("知力") ?? (sheet.abilities["知力"] ?? 0);
