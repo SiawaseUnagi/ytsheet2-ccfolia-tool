@@ -81,13 +81,13 @@ function resourceCommands(skill: YtSkill): string[] {
 function judgementCommand(skill: YtSkill): string | null {
   const judge = skill.judge.trim();
   if (!hasText(judge) || /自動成功|なし|―|-/.test(judge)) return null;
-  if (/魔術/.test(judge)) return "{魔術D}D+{魔術判定}+{魔術判定修正}+{判定BD}D+{命中BD}D>=0 魔術判定";
-  if (/呪歌/.test(judge)) return "{呪歌D}D+{呪歌判定}+{呪歌判定修正}+{判定BD}D>=0 呪歌判定";
-  if (/錬金術/.test(judge)) return "{錬金術D}D+{錬金術判定}+{錬金術判定修正}+{判定BD}D>=0 錬金術判定";
-  if (/命中/.test(judge)) return "{命中D}D+{命中判定}+{命中判定修正}+{判定BD}D+{命中BD}D>=0 命中判定";
-  if (/回避/.test(judge)) return "{回避D}D+{回避判定}+{回避判定修正}+{判定BD}D+{回避BD}D>=0 回避判定";
+  if (/魔術/.test(judge)) return "{魔術判定ダイス}D+{魔術判定}+{判定BD}D+{命中BD}D>=0 魔術判定";
+  if (/呪歌/.test(judge)) return "{呪歌判定ダイス}D+{呪歌判定}+{判定BD}D>=0 呪歌判定";
+  if (/錬金術/.test(judge)) return "{錬金術判定ダイス}D+{錬金術判定}+{判定BD}D>=0 錬金術判定";
+  if (/命中/.test(judge)) return "{命中ダイス}D+{命中}+{判定BD}D+{命中BD}D>=0 命中判定";
+  if (/回避/.test(judge)) return "{回避ダイス}D+{回避}+{判定BD}D+{回避BD}D>=0 回避判定";
   const ability = judge.match(/(筋力|器用|敏捷|知力|感知|精神|幸運)/)?.[1];
-  if (ability) return `{${ability}D}D+{${ability}}+{${ability}判定修正}+{判定BD}D>=0 ${judge}`;
+  if (ability) return `{${ability}判定ダイス}D+{${ability}判定}+{判定BD}D>=0 ${judge}`;
   return `2D>=0 ${judge}`;
 }
 
