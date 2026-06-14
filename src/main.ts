@@ -91,10 +91,10 @@ function buildVariableText(status: unknown[], params: unknown[], skillNames: str
   for (const label of paramLabels) lines.push(`{${label}}`);
   lines.push("", "### ■式の部品");
   lines.push(
-    "{命中D}D+{命中判定}+{命中判定修正}+{判定BD}D+{命中BD}D",
-    "{回避D}D+{回避判定}+{回避判定修正}+{判定BD}D+{回避BD}D",
-    "{魔術D}D+{魔術判定}+{魔術判定修正}+{判定BD}D+{命中BD}D",
-    "{攻撃力D}D+{攻撃力}+{ダメBD}D+{ダメバフ}",
+    "{命中ダイス}D+{命中}+{判定BD}D+{命中BD}D",
+    "{回避ダイス}D+{回避}+{判定BD}D+{回避BD}D",
+    "{魔術判定ダイス}D+{魔術判定}+{判定BD}D+{命中BD}D",
+    "{攻撃ダイス}D+{攻撃力}+{ダメBD}D+{ダメバフ}",
     "c(-{物理防御力})",
     "c(-{魔法防御力})",
   );
