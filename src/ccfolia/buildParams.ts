@@ -15,7 +15,11 @@ function ref(base: string, n: number): string {
   return `{${base}}${delta(n)}`;
 }
 
-export function buildParams(sheet: ParsedSheet) {
+function valueOrFormula(useFormula: boolean, formulaBase: string, modifier: number, directValue: number): string {
+  return useFormula ? ref(formulaBase, modifier) : String(directValue);
+}
+
+export function buildParams(sheet: ParsedSheet, useYtsheetStyleParams = true) {
   const raw = sheet.raw;
   const p: { label: string; value: string }[] = [];
 
@@ -37,7 +41,7 @@ export function buildParams(sheet: ParsedSheet) {
     const base = sheet.abilities[label] ?? 0;
     const roll = pick(raw, [rollKey], base);
     abilityRolls.set(label, roll);
-    p.push({ label: `${label}判定`, value: ref(label, roll - base) });
+    p.push({ label: `${label}判定`, value: valueOrFormula(useYtsheetStyleParams, label, roll - base, roll) });
     p.push({ label: `${label}判定ダイス`, value: String(pick(raw, [diceKey], 2)) });
   }
 
@@ -47,28 +51,40 @@ export function buildParams(sheet: ParsedSheet) {
   const senRoll = abilityRolls.get("感知") ?? (sheet.abilities["感知"] ?? 0);
   const mndRoll = abilityRolls.get("精神") ?? (sheet.abilities["精神"] ?? 0);
 
+  const acc = pick(raw, ["battleTotalAcc"], dexRoll);
+  const atk = pick(raw, ["battleTotalAtk"], 0);
+  const eva = pick(raw, ["battleTotalEva"], agiRoll);
+  const trapDetect = pick(raw, ["rollTrapDetect"], senRoll + pick(raw, ["rollTrapDetectAdd"], 0));
+  const trapRelease = pick(raw, ["rollTrapRelease"], dexRoll + pick(raw, ["rollTrapReleaseAdd"], 0));
+  const dangerDetect = pick(raw, ["rollDangerDetect"], senRoll + pick(raw, ["rollDangerDetectAdd"], 0));
+  const enemyLore = pick(raw, ["rollEnemyLore"], intRoll + pick(raw, ["rollEnemyLoreAdd"], 0));
+  const appraisal = pick(raw, ["rollAppraisal"], intRoll + pick(raw, ["rollAppraisalAdd"], 0));
+  const magic = pick(raw, ["rollMagic"], intRoll + pick(raw, ["rollMagicAdd"], 0));
+  const song = pick(raw, ["rollSong"], mndRoll + pick(raw, ["rollSongAdd"], 0));
+  const alchemy = pick(raw, ["rollAlchemy"], dexRoll + pick(raw, ["rollAlchemyAdd"], 0));
+
   p.push(
-    { label: "命中", value: ref("器用判定", pick(raw, ["battleTotalAcc"], dexRoll) - dexRoll) },
+    { label: "命中", value: valueOrFormula(useYtsheetStyleParams, "器用判定", acc - dexRoll, acc) },
     { label: "命中ダイス", value: String(pick(raw, ["battleDiceAcc"], 2)) },
-    { label: "攻撃力", value: String(pick(raw, ["battleTotalAtk"], 0)) },
+    { label: "攻撃力", value: String(atk) },
     { label: "攻撃ダイス", value: String(pick(raw, ["battleDiceAtk"], 2)) },
-    { label: "回避", value: ref("敏捷判定", pick(raw, ["battleTotalEva"], agiRoll) - agiRoll) },
+    { label: "回避", value: valueOrFormula(useYtsheetStyleParams, "敏捷判定", eva - agiRoll, eva) },
     { label: "回避ダイス", value: String(pick(raw, ["battleDiceEva"], 2)) },
-    { label: "トラップ探知", value: ref("感知判定", pick(raw, ["rollTrapDetect"], senRoll + pick(raw, ["rollTrapDetectAdd"], 0)) - senRoll) },
+    { label: "トラップ探知", value: valueOrFormula(useYtsheetStyleParams, "感知判定", trapDetect - senRoll, trapDetect) },
     { label: "トラップ探知ダイス", value: String(pick(raw, ["rollTrapDetectDice"], 2)) },
-    { label: "トラップ解除", value: ref("器用判定", pick(raw, ["rollTrapRelease"], dexRoll + pick(raw, ["rollTrapReleaseAdd"], 0)) - dexRoll) },
+    { label: "トラップ解除", value: valueOrFormula(useYtsheetStyleParams, "器用判定", trapRelease - dexRoll, trapRelease) },
     { label: "トラップ解除ダイス", value: String(pick(raw, ["rollTrapReleaseDice"], 2)) },
-    { label: "危険感知", value: ref("感知判定", pick(raw, ["rollDangerDetect"], senRoll + pick(raw, ["rollDangerDetectAdd"], 0)) - senRoll) },
+    { label: "危険感知", value: valueOrFormula(useYtsheetStyleParams, "感知判定", dangerDetect - senRoll, dangerDetect) },
     { label: "危険感知ダイス", value: String(pick(raw, ["rollDangerDetectDice"], 2)) },
-    { label: "エネミー識別", value: ref("知力判定", pick(raw, ["rollEnemyLore"], intRoll + pick(raw, ["rollEnemyLoreAdd"], 0)) - intRoll) },
+    { label: "エネミー識別", value: valueOrFormula(useYtsheetStyleParams, "知力判定", enemyLore - intRoll, enemyLore) },
     { label: "エネミー識別ダイス", value: String(pick(raw, ["rollEnemyLoreDice"], 2)) },
-    { label: "アイテム鑑定", value: ref("知力判定", pick(raw, ["rollAppraisal"], intRoll + pick(raw, ["rollAppraisalAdd"], 0)) - intRoll) },
+    { label: "アイテム鑑定", value: valueOrFormula(useYtsheetStyleParams, "知力判定", appraisal - intRoll, appraisal) },
     { label: "アイテム鑑定ダイス", value: String(pick(raw, ["rollAppraisalDice"], 2)) },
-    { label: "魔術判定", value: ref("知力判定", pick(raw, ["rollMagic"], intRoll + pick(raw, ["rollMagicAdd"], 0)) - intRoll) },
+    { label: "魔術判定", value: valueOrFormula(useYtsheetStyleParams, "知力判定", magic - intRoll, magic) },
     { label: "魔術判定ダイス", value: String(pick(raw, ["rollMagicDice"], 2)) },
-    { label: "呪歌判定", value: ref("精神判定", pick(raw, ["rollSong"], mndRoll + pick(raw, ["rollSongAdd"], 0)) - mndRoll) },
+    { label: "呪歌判定", value: valueOrFormula(useYtsheetStyleParams, "精神判定", song - mndRoll, song) },
     { label: "呪歌判定ダイス", value: String(pick(raw, ["rollSongDice"], 2)) },
-    { label: "錬金術判定", value: ref("器用判定", pick(raw, ["rollAlchemy"], dexRoll + pick(raw, ["rollAlchemyAdd"], 0)) - dexRoll) },
+    { label: "錬金術判定", value: valueOrFormula(useYtsheetStyleParams, "器用判定", alchemy - dexRoll, alchemy) },
     { label: "錬金術判定ダイス", value: String(pick(raw, ["rollAlchemyDice"], 2)) },
   );
 
