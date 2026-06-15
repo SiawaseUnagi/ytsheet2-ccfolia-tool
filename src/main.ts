@@ -17,6 +17,9 @@ app.innerHTML = `<main style="max-width:1000px;margin:auto;padding:16px;font-fam
   <button id='copy'>ココフォリアJSONをコピー</button>
   <button id='copyVars'>変数一覧をコピー</button>
 </div>
+<label style='display:block;margin:8px 0 16px'>
+  <input id='useYtsheetStyleParams' type='checkbox' checked /> パラメータをゆとシート標準寄せの参照式で出力する
+</label>
 <details style='margin:8px 0 16px'>
   <summary>URLで読み込めない時だけ、ゆとシートJSONを手入力する</summary>
   <textarea id='json' rows='8' style='width:100%;box-sizing:border-box;margin-top:8px'></textarea>
@@ -35,6 +38,8 @@ app.innerHTML = `<main style="max-width:1000px;margin:auto;padding:16px;font-fam
     <li><strong>ココフォリアJSONをコピー</strong>を押すと、編集内容を反映したJSONがコピーされます。</li>
     <li>ココフォリアの盤面で右クリックし、<strong>クリップボードから貼り付け</strong>でキャラクターコマを作成します。</li>
   </ol>
+  <h3>パラメータ出力</h3>
+  <p>「パラメータをゆとシート標準寄せの参照式で出力する」にチェックが入っていると、<code>命中 {器用判定}-1</code> のような参照式で出力します。チェックを外すと、同じ変数名のまま <code>命中 5</code> のように数値を直接入れて出力します。</p>
   <h3>編集欄について</h3>
   <p>ステータス欄は「ラベル 現在値 最大値」、パラメータ欄は「ラベル 値」の形で編集できます。区切りはタブ、半角スペース、カンマ、スラッシュ、= が使えます。</p>
   <pre style='white-space:pre-wrap;background:#fff;padding:8px;border-radius:6px'>HPP 2 0
@@ -211,7 +216,8 @@ function refreshOutputJsonFromEditedFields(): string {
     const custom = {};
     const { text, warnings } = buildPalette(sheet, custom);
     const status = buildStatus(sheet, custom);
-    const params = buildParams(sheet);
+    const useYtsheetStyleParams = (document.getElementById("useYtsheetStyleParams") as HTMLInputElement).checked;
+    const params = buildParams(sheet, useYtsheetStyleParams);
     const memo = buildMemo(raw);
     const color = extractColor(raw);
     const cc = buildCharacterJson(sheet.name, url, status, params, buildCommands(text), sheet.initiative, memo, color);
