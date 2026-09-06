@@ -9,7 +9,7 @@ export type CalculationState = {
 export const emptyCalculationState = (): CalculationState => ({ version: 1, flags: [], choices: [] });
 export type CalculationEditor = (() => void) & { getState: () => CalculationState };
 export function targetKey(t: RollTarget): string {
-  return JSON.stringify([t.skillName ? "skill" : "general", t.skillName ?? t.title, t.kind, t.judge ?? "", t.suffix]);
+  return JSON.stringify([t.skillName ? "skill" : "general", t.skillName ?? t.title, t.kind, t.judge ?? "", t.kind === "hpSet" ? "HP設定値（回復量とは別）" : t.suffix]);
 }
 /** Exclude row numbers and computed SL amounts. Reordered/levelled skills retain their identity. */
 const modifierKeyCache = new WeakMap<Modifier[], Map<Modifier, string>>();
@@ -19,7 +19,7 @@ export function modifierKey(m: Modifier, all: Modifier[]): string {
     keys = new Map(); const counts = new Map<string, number>();
     for (const x of all) {
       const signature = JSON.stringify([x.level === undefined ? "item" : "skill", x.source, x.effect,
-        x.kinds, x.attack, x.judge, x.hitOnly, x.magicOnly, x.penetrationOnly, x.diceOnly, x.onlySkill, x.attribute]);
+        x.kinds.filter(k => k !== "effect"), x.attack, x.judge, x.hitOnly, x.magicOnly, x.penetrationOnly, x.diceOnly, x.onlySkill, x.attribute]);
       const count = counts.get(signature) ?? 0; keys.set(x, `${signature}#${count}`); counts.set(signature, count + 1);
     }
     modifierKeyCache.set(all, keys);

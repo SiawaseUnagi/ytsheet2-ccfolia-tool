@@ -24,7 +24,7 @@ app.innerHTML = `<main style="max-width:1000px;margin:auto;padding:16px;font-fam
   <button id='copyVars'>変数一覧をコピー</button>
 </div>
 <label style='display:block;margin:8px 0 16px'>
-  <input id='useYtsheetStyleParams' type='checkbox' checked /> パラメータをゆとシート標準寄せの参照式で出力する
+  <input id='useYtsheetStyleParams' type='checkbox' checked /> ゆとシートのデフォルト変数を使用する
 </label>
 <details style='margin:8px 0 16px'>
   <summary>URLで読み込めない時だけ、ゆとシートJSONを手入力する</summary>
@@ -32,12 +32,12 @@ app.innerHTML = `<main style="max-width:1000px;margin:auto;padding:16px;font-fam
 </details>
 <h3>警告</h3><pre id='warn' style='white-space:pre-wrap'></pre>
 <h3>ココフォリアJSON</h3><textarea id='outjson' rows='16' style='width:100%;box-sizing:border-box'></textarea>
-<h3>ステータス（編集してからコピーすると反映：ラベル / 現在値 / 最大値）</h3><textarea id='statusEdit' rows='10' style='width:100%;box-sizing:border-box'></textarea>
-<h3>パラメータ（編集してからコピーすると反映：ラベル / 値）</h3><textarea id='paramsEdit' rows='12' style='width:100%;box-sizing:border-box'></textarea>
+<h3>ステータス（ラベル / 現在値 / 最大値）</h3><textarea id='statusEdit' rows='10' style='width:100%;box-sizing:border-box'></textarea>
+<h3>パラメータ（ラベル / 値）</h3><textarea id='paramsEdit' rows='12' style='width:100%;box-sizing:border-box'></textarea>
 <h3>チャットパレット編集用：変数一覧</h3><textarea id='vars' rows='12' style='width:100%;box-sizing:border-box'></textarea>
 <section id='calculationEditor' style='margin:16px 0;line-height:1.7' aria-label='判定・ダメージ・回復量の補正'></section>
 <h3>チャットパレット（ここを編集してからコピーすると反映）</h3><textarea id='palette' rows='20' style='width:100%;box-sizing:border-box'></textarea>
-<section style='margin-top:24px;padding:16px;border:1px solid #ddd;border-radius:8px;background:#fafafa;line-height:1.7'>
+<section id='usageInstructions' style='margin-top:24px;padding:16px;border:1px solid #ddd;border-radius:8px;background:#fafafa;line-height:1.7'>
   <h2 style='margin-top:0'>使い方</h2>
   <ol>
     <li>ゆとシートⅡのURLを入力して、<strong>出力</strong>を押します。</li>
@@ -48,7 +48,7 @@ app.innerHTML = `<main style="max-width:1000px;margin:auto;padding:16px;font-fam
   <h3>プリプレイ宣言</h3>
   <p>タイミングが「アイテム」のスキルと、効果文が「プリプレイで」から始まるスキルは、チャットパレットのプリプレイ欄にまとめて出力します。1行の中に改行用の <code>\\n</code> を入れているので、その行を押すだけで複数の宣言をまとめて発言できます。</p>
   <h3>パラメータ出力</h3>
-  <p>「パラメータをゆとシート標準寄せの参照式で出力する」にチェックが入っていると、<code>命中 {器用判定}-1</code> のような参照式で出力します。チェックを外すと、同じ変数名のまま <code>命中 5</code> のように数値を直接入れて出力します。</p>
+  <p>「ゆとシートのデフォルト変数を使用する」にチェックが入っていると、<code>命中 {器用判定}-1</code> のような参照式で出力します。チェックを外すと、同じ変数名のまま <code>命中 5</code> のように数値を直接入れて出力します。</p>
   <h3>編集欄について</h3>
   <p>ステータス欄は「ラベル 現在値 最大値」、パラメータ欄は「ラベル 値」の形で編集できます。区切りはタブ、半角スペース、カンマ、スラッシュ、= が使えます。</p>
   <pre style='white-space:pre-wrap;background:#fff;padding:8px;border-radius:6px'>HPP 2 0
@@ -59,11 +59,15 @@ CL 3</pre>
   <p>武器攻撃のダメージ式は <code>{ダメージ属性}ダメージ</code> と表示します。初期値は「物理」で、マイナー欄に <code>//ダメージ属性=物理</code> を出力します。理力符などで属性を変える場合は、チャットパレット編集欄でこの行を、たとえば <code>//ダメージ属性=〈地〉属性魔法</code> に書き換えてください。物理ダメージに戻すときは、同じ行を <code>//ダメージ属性=物理</code> に戻します。</p>
   <p>この設定は表示用です。理力符の使用宣言を送るだけで属性が切り替わったり、消費したりする処理は追加していません。ダメージの数値や適用する防御力は別に確認してください。</p>
   <h3>判定・ダメージ・回復量の補正</h3>
-  <p>読み取れた魔法攻撃のダメージやHP・MPの回復量は、スキルの判定式の下に出力します。「式に加える補正」で対象の式を開き、加えたい効果にチェックを入れてください。スキルレベルは計算し、CLや能力値は変数のまま残します。</p>
+  <p>読み取れた魔法攻撃のダメージやHP・MPの回復量は、スキルの判定式の下に出力します。プロテクション・ディスコードのように効果をダイスで求めるスキルやレイズは、<code>5D プロテクション</code>、<code>2D レイズ</code> のようにスキル名を付けたロールを出します。ダイス数は各スキルの効果文とレベルから求め、読めない式は推測しません。「式に加える補正」で対象の式を開き、加えたい効果にチェックを入れてください。スキルレベルは計算し、CLや能力値は変数のまま残します。</p>
   <p>補正は新規出力時は未選択です。ゆとシートの合計値に反映済みの効果を選ぶと二重に加算されるため、元の効果文と適用対象を確認してください。攻撃用・HP回復用・MP回復用の補正は分けて扱います。「HPを○点にする」式には通常の回復量増加を加えません。</p>
-  <p>条件付きの効果は「0・1で切り替え」を選ぶと、必要なステータスを現在値0・最大値0で追加します。卓中は対応するステータスを1にすると有効、0にすると無効になります。未対応の条件や効果の書き換えは手動で調整してください。</p>
+  <p>補正のチェックは、式に組み込む操作です。条件付きの効果で「0・1で切り替え」を選ぶと、必要なステータスを現在値0・最大値0で追加します。卓中は対応するステータスを1にすると有効、0にすると無効になります。未対応の条件や効果の書き換えは手動で調整してください。</p>
+  <p>同じ内容の共通判定が複数の見出しにある場合、補正欄では一つにまとめ、チェックを変えると該当する行へまとめて反映します。スキルごとの判定や、元の式・適用対象が異なるものは別に扱います。以前の保存で共通判定の選択が異なる場合は勝手に統一せず、混在表示にします。チェックや加算方法を変更した補正から統一されます。</p>
+  <p>未登録の名前を変数一覧から使う場合は、ステータス欄にも追加してください。</p>
   <p>チェックの変更は対象の式だけに反映します。その式を手で編集した後は自動で上書きせず、候補式を表示します。編集を最初からやり直す「出力」は、変更内容を破棄するか確認してから再生成します。編集を残してキャラシを更新するときは「更新を反映」を使ってください。</p>
   <p>補正用の名前を短くしたいときは、「0・1で切り替え」の下にある「変数名を変更」を開き、WBなどを入力して「名前を適用」を押します。同じ補正を使う式、ステータス、変数一覧に反映し、使用回数の名前は変えません。手で編集した式は数式を作り直さず、変数名だけを置き換えます。空欄で適用すると元の名前に戻ります。</p>
+  <p>単一の能力値は <code>{スマッシュ}*{筋力}</code> のように出力します。合計を掛ける式では <code>{補正}*({筋力}+3)</code> のように括弧を残します。能力値のパラメータを数値ではなく複合式に手で変える場合は、参照した式の計算順も確認してください。</p>
+  <p>追加した切り替え用ステータスはチェックを外しても残ります。不要なものはステータス欄で削除できます。「元の効果文・条件を確認する」から原文を参照してください。</p>
   <h3>注意</h3>
   <p>このツールは、ゆとシートの内容からココフォリア用のコマを作る補助ツールです。スキル効果の条件付き補正までは完全自動では処理しません。必要な補正は、チャットパレット編集用の変数一覧を見ながら手動で足してください。</p>
   <p>チャットパレットを編集した後は、必ず<strong>ココフォリアJSONをコピー</strong>を押してください。表示されているJSONにも編集内容が反映されます。</p>

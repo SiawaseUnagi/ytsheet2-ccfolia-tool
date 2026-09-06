@@ -82,7 +82,7 @@ test('attack action bonus is offered only for that skill', () => {
 });
 test('flags gate only the selected effect', () => {
   const t = prepared.targets.find(t => t.id === 'weapon-damage');
-  assert.match(renderRoll(t, [{ modifier: modifier('スマッシュ'), flag: 'スマッシュ' }]), /\{スマッシュ\}\*\(\{筋力\}\)/);
+  assert.match(renderRoll(t, [{ modifier: modifier('スマッシュ'), flag: 'スマッシュ' }]), /\{スマッシュ\}\*\{筋力\}/);
   assert.equal(compatible(modifier('スマッシュ'), target('水の魔法', 'damage')), false);
 });
 test('unknown, recipient-side and rewriting effects are not auto-added', () => {

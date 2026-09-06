@@ -139,7 +139,7 @@ export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): { te
     "〈〉属性魔法",
     "",
   );
-  s.get("メジャー")?.push(...weaponAttackLines());
+  s.get("メジャー")?.push(...weaponAttackLines(), "");
 
   const preplaySkills: YtSkill[] = [];
   const dependent = new Map<string, SkillOutput[]>();

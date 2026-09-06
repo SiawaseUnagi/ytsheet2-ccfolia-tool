@@ -123,5 +123,7 @@ export function addTerm(base: string, extra: string): string {
 export function gatedTerm(term: string, flag: string | undefined): string {
   if (term === "0" || !flag) return term;
   if (term === "1") return `{${flag}}`;
-  return `{${flag}}*(${term})`;
+  // Base abilities are numeric parameters. Keep composite terms grouped.
+  const atomic = /^\{(?:CL|筋力|器用|敏捷|知力|感知|精神|幸運)\}$/.test(term);
+  return `{${flag}}*${atomic ? term : `(${term})`}`;
 }

@@ -14,7 +14,9 @@ export function renderRoll(target: RollTarget, selected: Selection[] = []): stri
     dice = addTerm(dice, gatedTerm(modifier.amount.dice, flag));
     fixed = addTerm(fixed, gatedTerm(modifier.amount.fixed, flag));
   }
-  const formula = dice === "0" ? `C(${fixed})` : `(${dice})D${fixed === "0" ? "" : (fixed.startsWith("-") ? fixed : `+${fixed}`)}`;
+  // Effect-only rolls should read "5D プロテクション", not a damage total or HP heading.
+  const simpleDice = (target.kind === "hpSet" || target.kind === "effect") && /^\d+$/.test(dice);
+  const formula = dice === "0" ? `C(${fixed})` : `${simpleDice ? dice : `(${dice})`}D${fixed === "0" ? "" : (fixed.startsWith("-") ? fixed : `+${fixed}`)}`;
   return `${formula}${target.kind === "check" ? ">=0" : ""} ${target.suffix}`;
 }
 

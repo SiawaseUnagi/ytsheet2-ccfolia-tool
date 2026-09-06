@@ -38,6 +38,12 @@ jobs:
       - name: Test editor validation
         run: node tests/editorValidation.test.cjs
 
+      - name: Test saved sessions and update merging
+        run: node tests/session-core.test.cjs
+
+      - name: Test effect rolls and grouped check editor
+        run: node tests/roll-editor.test.cjs
+
       - name: Build
         run: npm run build
 

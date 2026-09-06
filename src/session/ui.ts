@@ -23,21 +23,22 @@ export function mountSessionTools(bridge: SessionBridge): void {
   toolbar.append(save, resume, update); section.append(toolbar, select);
   const notice = el("p"); notice.id = "sessionNotice"; notice.setAttribute("role", "status"); section.append(notice);
   const dirty = el("p"); dirty.id = "sessionDirty"; dirty.style.fontSize = "0.9em"; section.append(dirty);
-  section.append(el("p", "「続きから編集」は保存した編集内容をそのまま復元します。「更新を反映」は最新のキャラシを読み込み、変更点を確認してから取り込みます。更新時は、HP・MP・フェイトと使用回数を新しい最大値にそろえ、一時的な補正を0に戻します。消耗品は最新キャラシの所持数を使います。"));
   const options = el("details"); options.append(el("summary", "保存ファイル・更新前に戻す"));
   const exportFile = button("保存ファイルを書き出す", "exportSession"), importFile = button("保存ファイルを読み込む", "importSession"), undo = button("更新前に戻す", "undoSession"), remove = button("選択した保存を削除", "deleteSession");
   const more = el("div"); more.style.cssText = toolbar.style.cssText; more.append(exportFile, importFile, undo, remove);
   const fileInput = el("input"); fileInput.type = "file"; fileInput.accept = ".json,application/json"; fileInput.hidden = true; fileInput.id = "sessionFile";
-  options.append(more, fileInput, el("p", "保存ファイルにはキャラシの内容・編集内容・直前の更新前データが含まれます。共有するときは内容にご注意ください。ファイルを読み込むだけでは、ブラウザの保存には上書きしません。")); section.append(options);
+  options.append(more, fileInput); section.append(options);
   const preview = el("section"); preview.id = "sessionUpdatePreview"; preview.hidden = true; section.append(preview);
   const place = document.getElementById("useYtsheetStyleParams")?.closest("label"); place?.after(section);
   const help = el("section"); help.style.cssText = "margin-top:16px;line-height:1.7";
   help.append(el("h3", "保存・再開とキャラシの更新"),
+    el("p", "「続きから編集」は保存した編集内容をそのまま復元します。「更新を反映」は最新のキャラシを読み込み、変更点を確認してから取り込みます。更新時は、HP・MP・フェイトと使用回数を新しい最大値にそろえ、一時的な補正を0に戻します。消耗品は最新キャラシの所持数を使います。"),
+    el("p", "保存ファイルにはキャラシの内容・編集内容・直前の更新前データが含まれます。共有するときは内容にご注意ください。ファイルを読み込むだけでは、ブラウザの保存には上書きしません。"),
     el("p", "編集が終わったら「このブラウザに保存」を押してください（自動保存ではありません）。再開するときは一覧からキャラを選び「続きから編集」を押してください。補正のチェック、短縮名、手直しした文章も保存します。"),
     el("p", "レベルアップなどでキャラシを変更したら「更新を反映」を押し、変更点を確認してください。最後に「この内容で更新・保存」を押すと反映します。自動生成のままの箇所は更新し、手編集と同じ箇所が変わったときは残す内容を選べます。追加スキルは追加し、自分で削除した項目は勝手に復活させません。大きく並べ替えた部分や、直接入力した数値は自動で意味を判定せず確認に残す場合があります。"),
     el("p", "更新を反映する前に、更新前の状態もブラウザへ保存します。「更新前に戻す」は直前1回分に戻ります。戻した後の編集も含め、必要に応じて再び保存してください。"),
     el("p", "保存先は画像などのキャッシュとは別の、この端末・ブラウザのローカルストレージです。「Cookie・サイトデータ」「Webサイトデータ」などを消すと保存内容も失われます。キャッシュだけの削除とは区別してください。シークレット・プライベートモードでは終了時に失われるため、通常モードで利用してください。別端末へは自動共有されません。大切な編集はファイルにも書き出して保管してください。"));
-  (document.querySelector("main") ?? section.parentElement)?.append(help);
+  (document.getElementById("usageInstructions") ?? document.querySelector("main") ?? section.parentElement)?.append(help);
   let busy = false, savedFingerprint = "", memoryFile: SaveFile | undefined;
   let priorStoreText: string | undefined;
   const isBusy = () => busy || (document.getElementById("gen") as HTMLButtonElement)?.disabled;

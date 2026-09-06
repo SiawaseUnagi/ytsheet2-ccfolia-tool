@@ -1,7 +1,7 @@
 import type { ParsedSheet, YtSkill } from "../ytsheet/types";
 import { leadingAmount, normalizeEffect, type Amount } from "./expression";
 
-export type RollKind = "check" | "damage" | "hpHeal" | "mpHeal" | "hpSet";
+export type RollKind = "check" | "damage" | "hpHeal" | "mpHeal" | "hpSet" | "effect";
 export type AttackKind = "weapon" | "melee" | "ranged" | "magic";
 export type RollTarget = {
   id: string; title: string; kind: RollKind; base: Amount; suffix: string;
@@ -31,7 +31,7 @@ export function skillRolls(skill: YtSkill, index: number, reviews: Review[]): Ro
   const targets: RollTarget[] = [];
   const attack = attackKind(skill);
   const add = (kind: RollKind, base: Amount, suffix: string) => {
-    targets.push({ id: `skill-${index}-${kind}-${targets.length}`, title: `《${skill.name}》 ${suffix}`, kind, base, suffix,
+    targets.push({ id: `skill-${index}-${kind}-${targets.length}`, title: suffix === skill.name ? `《${skill.name}》` : `《${skill.name}》 ${suffix}`, kind, base, suffix,
       skillName: skill.name, attack, magic: /魔術/.test(skill.judge) || attack === "magic", attribute: /[〈<]([^〉>]+)[〉>]属性/.exec(suffix)?.[1] });
   };
   // HP restoration and setting HP after revival intentionally have separate kinds.
@@ -42,7 +42,7 @@ export function skillRolls(skill: YtSkill, index: number, reviews: Review[]): Ro
     const value = leadingAmount(effect.slice(m.index! + m[0].length), skill.level);
     if (!value) continue;
     if (/^点?回復/.test(value.rest)) add(m[1] === "HP" ? "hpHeal" : "mpHeal", value.amount, `${m[1]}回復量`);
-    else if (m[1] === "HP" && /^点?に(?:する|変更)/.test(value.rest)) add("hpSet", value.amount, "HP設定値（回復量とは別）");
+    else if (m[1] === "HP" && /^点?に(?:する|変更)/.test(value.rest)) add("hpSet", value.amount, skill.name);
   }
   if (attack === "magic") {
     const m = /ダメージは\s*/.exec(effect);
@@ -55,6 +55,23 @@ export function skillRolls(skill: YtSkill, index: number, reviews: Review[]): Ro
     } else reviews.push({ source: skill.name, reason: "魔法攻撃の基本ダメージを確定できません。式を手動で追加してください。", effect: skill.effect });
   } else if (attack) {
     add("damage", { dice: "{攻撃ダイス}", fixed: "{攻撃力}" }, "{ダメージ属性}ダメージ");
+  }
+  if (!attack && targets.length === 0 && !/《[^》]+》の(?:「?効果|ダメージ)|効果を[^。]*変更|たとえば|例えば|一例/.test(effect)) {
+    const support: Amount[] = [];
+    for (const sentence of effect.split("。")) {
+      const match = /ダメージに\s*([+\-])\s*/.exec(sentence);
+      if (!match) continue;
+      const reduction = match[1] === "-" && /ダメージ軽減|受けるダメージ|受ける[^。]*ダメージ/.test(effect);
+      const increase = match[1] === "+" && /ダメージ増加/.test(effect);
+      if (!reduction && !increase) continue;
+      const value = leadingAmount(sentence.slice(match.index + match[0].length), skill.level);
+      // No guesses from page numbers, examples, dice-roll instructions or ambiguous expressions.
+      if (!value || !/^(?:点)?(?:する|させる|$)/.test(value.rest) || value.amount.dice === "0") continue;
+      if (/^[-]/.test(value.amount.dice) || /^[-]/.test(value.amount.fixed)) continue;
+      support.push(value.amount);
+    }
+    if (support.length === 1) add("effect", support[0], skill.name);
+    else if (support.length > 1) reviews.push({ source: skill.name, reason: "効果のダイス式が複数あるため、どれを使うか確認してください。", effect: skill.effect });
   }
   if (/(?:HP|MP).*回復|回復.*(?:HP|MP)/.test(effect) && targets.every(t => t.kind !== "hpHeal" && t.kind !== "mpHeal" && t.kind !== "hpSet")) {
     // A recovery boost is not a recovery action in its own right.
@@ -73,7 +90,7 @@ function attackScope(text: string): AttackKind | undefined {
 
 function classify(prefix: string, full: string): Partial<Modifier> | null {
   if (/(?:あらゆる|すべての)ダイスロール/.test(prefix)) {
-    return { kinds: ["check", "damage", "hpHeal", "mpHeal", "hpSet"], diceOnly: true };
+    return { kinds: ["check", "damage", "hpHeal", "mpHeal", "hpSet", "effect"], diceOnly: true };
   }
   if (/回復/.test(prefix) && /効果|回復量|回復/.test(prefix)) {
     if (/受ける|受けた|受けて/.test(prefix)) return null;
@@ -95,11 +112,11 @@ function classify(prefix: string, full: string): Partial<Modifier> | null {
 export function analyzeModifiers(sheet: ParsedSheet): Analysis {
   const modifiers: Modifier[] = [], reviews: Review[] = [];
   const sources = sheet.skills.map((skill, index) => ({ name: skill.name, level: skill.level, timing: skill.timing,
-    effect: skill.effect, usage: skill.usage, ownAttack: attackKind(skill), id: `skill-${index}` }));
+    effect: skill.effect, usage: skill.usage, ownAttack: attackKind(skill), skill: skill as YtSkill | undefined, id: `skill-${index}` }));
   for (const slot of ["HandR", "HandL", "Head", "Body", "Sub", "Other"]) {
     const name = String(sheet.raw[`armament${slot}Name`] ?? "").trim();
     const effect = String(sheet.raw[`armament${slot}Note`] ?? "").trim();
-    if (name && effect) sources.push({ name, level: 0, timing: "装備", effect, usage: "", ownAttack: undefined, id: `item-${slot}` });
+    if (name && effect) sources.push({ name, level: 0, timing: "装備", effect, usage: "", ownAttack: undefined, skill: undefined, id: `item-${slot}` });
   }
   for (const source of sources) {
     const full = normalizeEffect(`${source.effect} ${source.usage}`);
@@ -137,7 +154,8 @@ export function analyzeModifiers(sheet: ParsedSheet): Analysis {
         found = true;
       }
     }
-    if (!found) reviews.push({ source: source.name, reason: "補正の対象または数式を確定できません。手動で調整してください。", effect: source.effect });
+    const hasEffectRoll = source.skill && skillRolls(source.skill, 0, []).some(t => t.kind === "effect");
+    if (!found && !hasEffectRoll) reviews.push({ source: source.name, reason: "補正の対象または数式を確定できません。手動で調整してください。", effect: source.effect });
   }
   return { modifiers, reviews };
 }
