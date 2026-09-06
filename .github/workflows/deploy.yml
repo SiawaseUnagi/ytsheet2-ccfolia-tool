@@ -35,6 +35,9 @@ jobs:
       - name: Test correction flag names
         run: node tests/flagNames.test.cjs
 
+      - name: Test editor validation
+        run: node tests/editorValidation.test.cjs
+
       - name: Build
         run: npm run build
 
