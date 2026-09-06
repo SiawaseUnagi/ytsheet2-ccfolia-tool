@@ -135,7 +135,7 @@ export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): { te
   s.get("マイナー")?.push(
     ...defaultConsumableLines(),
     "マイナーアクションで理力符（）を使用。",
-    "//ダメージ属性=〈地〉属性魔法",
+    "//ダメージ属性=物理",
     "〈〉属性魔法",
     "",
   );
