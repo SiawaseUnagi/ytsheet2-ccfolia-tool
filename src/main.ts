@@ -48,6 +48,9 @@ app.innerHTML = `<main style="max-width:1000px;margin:auto;padding:16px;font-fam
 スマッシュ 0 0
 CL 3</pre>
   <p>行を消すとその項目は削除され、行を追加すると項目を追加できます。並び替えたい場合は、行の順番を入れ替えてください。</p>
+  <h3>ダメージ属性</h3>
+  <p>武器攻撃のダメージ式は <code>{ダメージ属性}ダメージ</code> と表示します。マイナー欄にある <code>//ダメージ属性=〈地〉属性魔法</code> の行を、チャットパレット編集欄で書き換えてください。最初は「〈地〉属性魔法」です。通常の物理ダメージなら、同じ行を <code>//ダメージ属性=物理</code> に変更します。</p>
+  <p>この設定は表示用です。理力符の使用宣言を送るだけで属性が切り替わったり、消費したりする処理は追加していません。ダメージの数値や適用する防御力は別に確認してください。</p>
   <h3>注意</h3>
   <p>このツールは、ゆとシートの内容からココフォリア用のコマを作る補助ツールです。スキル効果の条件付き補正までは完全自動では処理しません。必要な補正は、チャットパレット編集用の変数一覧を見ながら手動で足してください。</p>
   <p>チャットパレットを編集した後は、必ず<strong>ココフォリアJSONをコピー</strong>を押してください。表示されているJSONにも編集内容が反映されます。</p>
@@ -84,6 +87,7 @@ function buildVariableText(status: unknown[], params: unknown[], skillNames: str
   const lines: string[] = [];
   lines.push("### ■よく使う補正");
   lines.push("{判定BD}D", "{命中BD}D", "{回避BD}D", "{ダメBD}D", "{ダメバフ}");
+  lines.push("", "### ■ダメージ属性", "{ダメージ属性}");
   if (allSkillFlags.length) {
     lines.push("", "### ■スキル・フラグ候補");
     for (const label of allSkillFlags) lines.push(`{${label}}`, `{${label}}D`, `:${label}=1`, `:${label}=0`);
