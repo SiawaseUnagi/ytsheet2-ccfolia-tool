@@ -1,3 +1,5 @@
+import { prepareCalculationPalette } from "./calculation/palette";
+import { mountCalculationEditor } from "./calculation/ui";
 import { buildCharacterJson } from "./ccfolia/buildCharacterJson";
 import { buildCommands } from "./ccfolia/buildCommands";
 import { buildMemo } from "./ccfolia/buildMemo";
@@ -29,6 +31,7 @@ app.innerHTML = `<main style="max-width:1000px;margin:auto;padding:16px;font-fam
 <h3>ステータス（編集してからコピーすると反映：ラベル / 現在値 / 最大値）</h3><textarea id='statusEdit' rows='10' style='width:100%;box-sizing:border-box'></textarea>
 <h3>パラメータ（編集してからコピーすると反映：ラベル / 値）</h3><textarea id='paramsEdit' rows='12' style='width:100%;box-sizing:border-box'></textarea>
 <h3>チャットパレット編集用：変数一覧</h3><textarea id='vars' rows='12' style='width:100%;box-sizing:border-box'></textarea>
+<section id='calculationEditor' style='margin:16px 0;line-height:1.7' aria-label='判定・ダメージ・回復量の補正'></section>
 <h3>チャットパレット（ここを編集してからコピーすると反映）</h3><textarea id='palette' rows='20' style='width:100%;box-sizing:border-box'></textarea>
 <section style='margin-top:24px;padding:16px;border:1px solid #ddd;border-radius:8px;background:#fafafa;line-height:1.7'>
   <h2 style='margin-top:0'>使い方</h2>
@@ -51,6 +54,11 @@ CL 3</pre>
   <h3>ダメージ属性</h3>
   <p>武器攻撃のダメージ式は <code>{ダメージ属性}ダメージ</code> と表示します。初期値は「物理」で、マイナー欄に <code>//ダメージ属性=物理</code> を出力します。理力符などで属性を変える場合は、チャットパレット編集欄でこの行を、たとえば <code>//ダメージ属性=〈地〉属性魔法</code> に書き換えてください。物理ダメージに戻すときは、同じ行を <code>//ダメージ属性=物理</code> に戻します。</p>
   <p>この設定は表示用です。理力符の使用宣言を送るだけで属性が切り替わったり、消費したりする処理は追加していません。ダメージの数値や適用する防御力は別に確認してください。</p>
+  <h3>判定・ダメージ・回復量の補正</h3>
+  <p>読み取れた魔法攻撃のダメージやHP・MPの回復量は、スキルの判定式の下に出力します。「式に加える補正」で対象の式を開き、加えたい効果にチェックを入れてください。スキルレベルは計算し、CLや能力値は変数のまま残します。</p>
+  <p>補正は最初はすべて未選択です。ゆとシートの合計値に反映済みの効果を選ぶと二重に加算されるため、元の効果文と適用対象を確認してください。攻撃用・HP回復用・MP回復用の補正は分けて扱います。「HPを○点にする」式には通常の回復量増加を加えません。</p>
+  <p>条件付きの効果は「0・1で切り替え」を選ぶと、必要なステータスを現在値0・最大値0で追加します。卓中は対応するステータスを1にすると有効、0にすると無効になります。未対応の条件や効果の書き換えは手動で調整してください。</p>
+  <p>チェックの変更は対象の式だけに反映します。その式を手で編集した後は自動で上書きせず、候補式を表示します。編集を最初からやり直す「出力」は、変更内容を破棄するか確認してから再生成します。</p>
   <h3>注意</h3>
   <p>このツールは、ゆとシートの内容からココフォリア用のコマを作る補助ツールです。スキル効果の条件付き補正までは完全自動では処理しません。必要な補正は、チャットパレット編集用の変数一覧を見ながら手動で足してください。</p>
   <p>チャットパレットを編集した後は、必ず<strong>ココフォリアJSONをコピー</strong>を押してください。表示されているJSONにも編集内容が反映されます。</p>
@@ -60,6 +68,38 @@ CL 3</pre>
 let latest = "";
 let latestVars = "";
 let latestSkillNames: string[] = [];
+let disposeCalculationEditor: (() => void) | undefined;
+let outputSnapshot = "";
+
+function editableSnapshot(): string {
+  return ["statusEdit", "paramsEdit", "palette"].map(id => (document.getElementById(id) as HTMLTextAreaElement).value).join("\0");
+}
+
+function ensureCorrectionFlag(requested: string): string {
+  const input = document.getElementById("statusEdit") as HTMLTextAreaElement;
+  const statuses = parseStatusText(input.value);
+  const parameters = parseParamsText((document.getElementById("paramsEdit") as HTMLTextAreaElement).value);
+  let label = requested;
+  let suffix = 0;
+  while (true) {
+    const existing = statuses.find(s => s.label === label);
+    if (!parameters.some(p => p.label === label) && !BASE_STATUS_LABELS.includes(label) && !isKnownConsumableLabel(label)) {
+      if (existing && Number(existing.max) === 0 && Number.isFinite(Number(existing.value))) return label;
+      if (!existing) break;
+    }
+    label = `${requested}_補正${suffix++ || ""}`;
+  }
+  input.value = `${input.value.trimEnd()}${input.value.trim() ? "\n" : ""}${label}\t0\t0`;
+  return label;
+}
+
+function refreshVariableHelpers(): void {
+  latestVars = buildVariableText(
+    parseStatusText((document.getElementById("statusEdit") as HTMLTextAreaElement).value),
+    parseParamsText((document.getElementById("paramsEdit") as HTMLTextAreaElement).value), latestSkillNames,
+  );
+  (document.getElementById("vars") as HTMLTextAreaElement).value = latestVars;
+}
 
 type NamedValue = { label?: unknown; value?: unknown; max?: unknown };
 type CcfoliaCharacterJson = { data?: { commands?: string; status?: unknown[]; params?: unknown[]; color?: string; [key: string]: unknown }; [key: string]: unknown };
@@ -212,6 +252,9 @@ function refreshOutputJsonFromEditedFields(): string {
 
 (document.getElementById("gen") as HTMLButtonElement).onclick = async () => {
   const warn = document.getElementById("warn") as HTMLElement;
+  if (latest && editableSnapshot() !== outputSnapshot && !window.confirm("再出力すると、手で編集した内容と補正の選択をリセットします。再出力しますか？")) return;
+  const generateButton = document.getElementById("gen") as HTMLButtonElement;
+  generateButton.disabled = true;
   warn.textContent = "出力中...";
   try {
     const raw = await loadRawSheet();
@@ -220,7 +263,11 @@ function refreshOutputJsonFromEditedFields(): string {
     const sheet = parseYtsheet(raw, url);
     latestSkillNames = unique(sheet.skills.map((skill) => skill.name));
     const custom = {};
-    const { text, warnings } = buildPalette(sheet, custom);
+    const generated = buildPalette(sheet, custom);
+    const prepared = prepareCalculationPalette(sheet, generated.text);
+    const text = prepared.text;
+    const warnings = [...generated.warnings];
+    if (prepared.reviews.length) warnings.push(`自動で式にできない効果が${prepared.reviews.length}件あります。「式に加える補正」の要確認欄を確認してください。`);
     const status = buildStatus(sheet, custom);
     const useYtsheetStyleParams = (document.getElementById("useYtsheetStyleParams") as HTMLInputElement).checked;
     const params = buildParams(sheet, useYtsheetStyleParams);
@@ -234,9 +281,18 @@ function refreshOutputJsonFromEditedFields(): string {
     (document.getElementById("paramsEdit") as HTMLTextAreaElement).value = paramsToText(params);
     (document.getElementById("vars") as HTMLTextAreaElement).value = latestVars;
     (document.getElementById("palette") as HTMLTextAreaElement).value = text;
+    disposeCalculationEditor?.();
+    disposeCalculationEditor = mountCalculationEditor(
+      document.getElementById("calculationEditor")!, prepared,
+      document.getElementById("palette") as HTMLTextAreaElement,
+      { ensureFlag: ensureCorrectionFlag, changed: refreshVariableHelpers },
+    );
+    outputSnapshot = editableSnapshot();
     warn.textContent = warnings.join("\n") || "OK";
   } catch (e) {
     warn.textContent = `出力失敗: ${String(e)}`;
+  } finally {
+    generateButton.disabled = false;
   }
 };
 

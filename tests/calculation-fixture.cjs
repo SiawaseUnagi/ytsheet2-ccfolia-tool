@@ -1,0 +1,32 @@
+// Small synthetic sheet; effect excerpts are test inputs, not a rules database.
+const skill = (name, effect, extra = {}) => ({ name, effect, lv: '1', timing: 'メジャー', judge: '魔術判定', target: '単体', range: '20m', cost: '4', usage: '', ...extra });
+module.exports = {
+  characterName: '計算テスト', level: '6', hpTotal: '54', mpTotal: '69', fateTotal: '5',
+  sttStrTotal: '2', sttDexTotal: '5', sttAgiTotal: '3', sttIntTotal: '8', sttSenTotal: '5', sttMndTotal: '5', sttLukTotal: '2',
+  rollMagic: '9', rollMagicDice: '3', battleTotalAcc: '4', battleDiceAcc: '2', battleTotalAtk: '2', battleDiceAtk: '2', battleTotalEva: '3', battleDiceEva: '2',
+  battleTotalIni: '8', battleTotalDef: '6', battleTotalMDef: '8', battleTotalMove: '7', weightItems: '15', weightLimitItems: '15',
+  armamentOtherName: '回復の聖印', armamentOtherNote: '効果をダイスで求める「分類：魔術」に有効。パッシブ。HP回復、MP回復を行なう「分類：魔術」の効果に+2Dする。',
+  items: '└HPP*3@[1*0]\n┗HPP*3@[1*3]',
+  skill: [
+    skill('ヒール', '対象にHP回復を行なう。対象の【HP】を[3D+CL×3]点回復する。'),
+    skill('MP回復テスト', '対象の【MP】を［2D+SL×2］点回復する。', { lv: '3' }),
+    skill('レイズ', '対象の戦闘不能を回復し、【HP】を[2D]点にする。', { cost: '10' }),
+    skill('水の魔法', '対象に魔法攻撃を行なう。その攻撃のダメージは［2D+5］（〈水〉属性の魔法ダメージ）となる。'),
+    skill('貫通魔法', '対象に魔法攻撃を行なう。その攻撃のダメージは2D（貫通ダメージ）となる。'),
+    skill('バッシュ', '対象に武器攻撃を行なう。その攻撃のダメージに+［（SL）D］する。', { lv: '3', judge: '命中判定' }),
+    skill('HP回復強化', 'HP回復を行なうスキルの効果に+[SL×3]する。', { lv: '3', timing: 'パッシブ', judge: '―' }),
+    skill('MP回復強化', 'MP回復を行なうスキルの効果に+[SL×2]する。', { lv: '2', timing: 'パッシブ', judge: '―' }),
+    skill('魔法ダイス強化', '魔法攻撃のダメージに+[(SL)D]する。', { lv: '5', timing: 'パッシブ', judge: '―' }),
+    skill('ビリーブ', '貫通ダメージを与える魔法攻撃に有効。魔法攻撃のダメージに+[SL×4]する。', { lv: '3', timing: 'パッシブ', judge: '―' }),
+    skill('スマッシュ', '白兵攻撃のダメージに+【筋力】する。この効果はメインプロセス終了まで持続する。', { timing: 'マイナー', judge: '自動成功', target: '自身', cost: '5' }),
+    skill('ナイトロード', 'EPを1点消費。あらゆるダイスロールに+1Dする。この効果はシーン終了まで持続する。', { timing: 'セットアップ', judge: '自動成功', target: '自身', cost: '0' }),
+    skill('命中強化', 'あらゆる命中判定の達成値に+1する。', { timing: 'パッシブ', judge: '―' }),
+    skill('単体固定回復', '対象の【HP】を[CL×10]点回復する。', { judge: '自動成功' }),
+    skill('書き換えテスト', '《バーサーク》の効果に「武器を使用した命中判定に+1Dする」を追加する。', { timing: 'パッシブ', judge: '―' }),
+    skill('複雑回復', '対象の【HP】を[消費したフェイト×CL]点回復する。', { judge: '自動成功' }),
+    skill('火の強化', '〈火〉属性の魔法攻撃のダメージに+3する。', { timing: 'パッシブ', judge: '―' }),
+    skill('受ける回復強化', 'あなたが受けるHP回復の効果に+5する。', { timing: 'パッシブ', judge: '―' }),
+    skill('危険な入力', '魔法攻撃のダメージに+globalThis.alert(1)する。', { timing: 'パッシブ', judge: '―' }),
+    skill('プリプレイテスト', 'プリプレイでアイテムを取得する。', { timing: 'アイテム', judge: '―' }),
+  ],
+};
