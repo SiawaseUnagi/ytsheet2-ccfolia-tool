@@ -133,7 +133,8 @@ export function analyzeModifiers(sheet: ParsedSheet): Analysis {
         } : parsed.amount;
         if (source.timing === "装備" && /SL/.test(sentence.slice(m.index))) continue;
         const active = !/パッシブ|装備/.test(source.timing) && !source.ownAttack;
-        const conditionInText = active || /時|場合|いる間|効果中|クリティカル|場所|受けている|終了まで|暗闇|狂戦士化/.test(full) || /装備|使用/.test(source.usage);
+        const conditionText = full.replace(/クリティカル[:：][^。]*/g, "");
+        const conditionInText = active || /時|場合|いる間|効果中|クリティカル|場所|受けている|終了まで|暗闇|狂戦士化/.test(conditionText) || /装備|使用/.test(source.usage);
         const conditional = source.timing === "装備" ? equipmentToggle(normalized.slice(0, offset + m.index!), conditionInText) : conditionInText;
         const limited = /(?:シーン|シナリオ|ラウンド).{0,12}回/.test(source.usage);
         const flag = limited || /^(?:HP|MP|CL|フェイト|攻撃力|移動力)$/.test(source.name) ? `${source.name}_補正` : source.name;
@@ -153,6 +154,8 @@ export function analyzeModifiers(sheet: ParsedSheet): Analysis {
   return { modifiers, reviews };
 }
 export function compatible(modifier: Modifier, target: RollTarget): boolean {
+  // A weapon accuracy check can oppose an attack without dealing damage itself.
+  const targetAttack = target.attack ?? (target.kind === "check" && /命中/.test(target.judge ?? "") ? "weapon" : undefined);
   if (!modifier.kinds.includes(target.kind)) return false;
   if (modifier.attribute && modifier.attribute !== target.attribute) return false;
   if (modifier.onlySkill && modifier.onlySkill !== target.skillName) return false;
@@ -160,11 +163,11 @@ export function compatible(modifier: Modifier, target: RollTarget): boolean {
   if (modifier.penetrationOnly && !/貫通/.test(target.suffix)) return false;
   if (modifier.diceOnly && target.base.dice === "0") return false;
   if (modifier.judge && !target.judge?.includes(modifier.judge)) return false;
-  if (modifier.hitOnly && !target.attack) return false;
-  if (modifier.attack === "magic" && target.attack !== "magic") return false;
+  if (modifier.hitOnly && !targetAttack) return false;
+  if (modifier.attack === "magic" && targetAttack !== "magic") return false;
   if (modifier.attack && modifier.attack !== "magic") {
-    if (!target.attack || target.attack === "magic") return false;
-    if (modifier.attack !== "weapon" && target.attack !== "weapon" && modifier.attack !== target.attack) return false;
+    if (!targetAttack || targetAttack === "magic") return false;
+    if (modifier.attack !== "weapon" && targetAttack !== "weapon" && modifier.attack !== targetAttack) return false;
   }
   return true;
 }
