@@ -100,7 +100,7 @@ function weaponAttackLines(): string[] {
   return [
     "メジャーアクションで武器攻撃を行う。",
     "({命中ダイス}+{判定BD}+{命中BD})D+{命中}>=0 命中判定",
-    "({攻撃ダイス}+{ダメBD})D+{攻撃力}+{ダメバフ} 物理ダメージ",
+    "({攻撃ダイス}+{ダメBD})D+{攻撃力}+{ダメバフ} {ダメージ属性}ダメージ",
   ];
 }
 
@@ -132,7 +132,13 @@ function pushResets(map: Map<string, string[]>, resets: SkillOutput["resets"]) {
 export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): { text: string; warnings: string[] } {
   const s = sec();
   const warnings = [...sheet.warnings];
-  s.get("マイナー")?.push(...defaultConsumableLines());
+  s.get("マイナー")?.push(
+    ...defaultConsumableLines(),
+    "マイナーアクションで理力符（）を使用。",
+    "//ダメージ属性=〈地〉属性魔法",
+    "〈〉属性魔法",
+    "",
+  );
   s.get("メジャー")?.push(...weaponAttackLines());
 
   const preplaySkills: YtSkill[] = [];
