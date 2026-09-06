@@ -44,6 +44,12 @@ jobs:
       - name: Test effect rolls and grouped check editor
         run: node tests/roll-editor.test.cjs
 
+      - name: Test consumables and all-check modifiers
+        run: node tests/enhancements.test.cjs
+
+      - name: Test attack-check and critical-note edge cases
+        run: node tests/modifier-edgecases.test.cjs
+
       - name: Build
         run: npm run build
 
