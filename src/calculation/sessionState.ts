@@ -50,6 +50,9 @@ export function applyCalculationState(prepared: PreparedPalette, state: Calculat
 
 /** Remap only exact formula lines in the same skill/section. Other text is treated as user-owned. */
 export function locateSavedRanges(prepared: PreparedPalette, text: string): PreparedPalette {
+  // An unchanged palette already has exact positions, even when two formula lines match.
+  // Only infer positions when loading text that differs from the generated document.
+  if (text === prepared.text) return { ...prepared, ranges: prepared.ranges.map(range => ({ ...range })) };
   type Line = { text: string; scope: string; start: number };
   const lines = (input: string): Line[] => {
     let section = "", skill = "", start = 0;
