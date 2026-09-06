@@ -1,6 +1,7 @@
 import type { ParsedSheet } from "../ytsheet/types";
 import { analyzeModifiers, attackKind, skillRolls, type Analysis, type Modifier, type RollTarget } from "./analysis";
 import { addTerm, gatedTerm, type Amount } from "./expression";
+import { replaceFlagReferences } from "./flagNames";
 
 export type Selection = { modifier: Modifier; flag?: string };
 export type FormulaRange = { id: string; start: number; end: number; expected: string; edited: boolean };
@@ -115,6 +116,20 @@ export class TrackedPalette {
       range.edited = true;
     }
     this.text = next;
+  }
+  /** A deliberate rename changes tokens, not the user's other edits or checkbox ownership. */
+  renameFlag(from: string, to: string): void {
+    if (from === to) return;
+    const previous = this.text;
+    for (const range of this.ranges) {
+      if (range.edited) continue;
+      if (previous.slice(range.start, range.end) !== range.expected) { range.edited = true; continue; }
+      const start = replaceFlagReferences(previous.slice(0, range.start), from, to).length;
+      range.expected = replaceFlagReferences(range.expected, from, to);
+      range.start = start;
+      range.end = start + range.expected.length;
+    }
+    this.text = replaceFlagReferences(previous, from, to);
   }
   replace(id: string, line: string): boolean {
     const range = this.ranges.find(r => r.id === id);

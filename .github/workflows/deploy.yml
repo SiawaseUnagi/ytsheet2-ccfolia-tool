@@ -32,6 +32,9 @@ jobs:
       - name: Test calculations and typecheck
         run: node tests/calculation.test.cjs
 
+      - name: Test correction flag names
+        run: node tests/flagNames.test.cjs
+
       - name: Build
         run: npm run build
 

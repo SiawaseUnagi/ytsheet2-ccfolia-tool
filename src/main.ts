@@ -1,3 +1,4 @@
+import { checkFlagRename, replaceFlagReferences, replaceStatusLabel } from "./calculation/flagNames";
 import { prepareCalculationPalette } from "./calculation/palette";
 import { mountCalculationEditor } from "./calculation/ui";
 import { buildCharacterJson } from "./ccfolia/buildCharacterJson";
@@ -59,6 +60,7 @@ CL 3</pre>
   <p>補正は最初はすべて未選択です。ゆとシートの合計値に反映済みの効果を選ぶと二重に加算されるため、元の効果文と適用対象を確認してください。攻撃用・HP回復用・MP回復用の補正は分けて扱います。「HPを○点にする」式には通常の回復量増加を加えません。</p>
   <p>条件付きの効果は「0・1で切り替え」を選ぶと、必要なステータスを現在値0・最大値0で追加します。卓中は対応するステータスを1にすると有効、0にすると無効になります。未対応の条件や効果の書き換えは手動で調整してください。</p>
   <p>チェックの変更は対象の式だけに反映します。その式を手で編集した後は自動で上書きせず、候補式を表示します。編集を最初からやり直す「出力」は、変更内容を破棄するか確認してから再生成します。</p>
+  <p>補正用の名前を短くしたいときは、「0・1で切り替え」の下にある「変数名を変更」を開き、WBなどを入力して「名前を適用」を押します。同じ補正を使う式、ステータス、変数一覧に反映し、使用回数の名前は変えません。手で編集した式は数式を作り直さず、変数名だけを置き換えます。空欄で適用すると元の名前に戻ります。</p>
   <h3>注意</h3>
   <p>このツールは、ゆとシートの内容からココフォリア用のコマを作る補助ツールです。スキル効果の条件付き補正までは完全自動では処理しません。必要な補正は、チャットパレット編集用の変数一覧を見ながら手動で足してください。</p>
   <p>チャットパレットを編集した後は、必ず<strong>ココフォリアJSONをコピー</strong>を押してください。表示されているJSONにも編集内容が反映されます。</p>
@@ -91,6 +93,21 @@ function ensureCorrectionFlag(requested: string): string {
   }
   input.value = `${input.value.trimEnd()}${input.value.trim() ? "\n" : ""}${label}\t0\t0`;
   return label;
+}
+
+function renameCorrectionFlag(previous: string, requested: string): string {
+  const statusInput = document.getElementById("statusEdit") as HTMLTextAreaElement;
+  const paramsInput = document.getElementById("paramsEdit") as HTMLTextAreaElement;
+  const paletteInput = document.getElementById("palette") as HTMLTextAreaElement;
+  const name = checkFlagRename(
+    previous, requested, parseStatusText(statusInput.value), parseParamsText(paramsInput.value), paletteInput.value,
+    label => BASE_STATUS_LABELS.includes(label) || label === "initiative" || isKnownConsumableLabel(label),
+  );
+  // Validation is complete before any field changes. Keep row formatting and current values.
+  statusInput.value = replaceStatusLabel(statusInput.value, previous, name);
+  paramsInput.value = replaceFlagReferences(paramsInput.value, previous, name);
+  paletteInput.value = replaceFlagReferences(paletteInput.value, previous, name);
+  return name;
 }
 
 function refreshVariableHelpers(): void {
@@ -285,7 +302,7 @@ function refreshOutputJsonFromEditedFields(): string {
     disposeCalculationEditor = mountCalculationEditor(
       document.getElementById("calculationEditor")!, prepared,
       document.getElementById("palette") as HTMLTextAreaElement,
-      { ensureFlag: ensureCorrectionFlag, changed: refreshVariableHelpers },
+      { ensureFlag: ensureCorrectionFlag, renameFlag: renameCorrectionFlag, changed: refreshVariableHelpers },
     );
     outputSnapshot = editableSnapshot();
     warn.textContent = warnings.join("\n") || "OK";

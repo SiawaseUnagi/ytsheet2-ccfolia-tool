@@ -1,7 +1,13 @@
 import { compatible, type Modifier, type RollTarget } from "./analysis";
 import { renderRoll, TrackedPalette, type PreparedPalette, type Selection } from "./palette";
+import { validateFlagName } from "./flagNames";
 
-type Hooks = { ensureFlag: (label: string) => string; changed: () => void };
+type Hooks = {
+  ensureFlag: (label: string) => string;
+  renameFlag: (previous: string, requested: string) => string;
+  changed: () => void;
+};
+type FlagBinding = { name: string; actual?: string };
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, text = ""): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag); node.textContent = text; return node;
 }
@@ -18,6 +24,10 @@ export function mountCalculationEditor(host: HTMLElement, prepared: PreparedPale
   const tracker = new TrackedPalette(prepared.text, prepared.ranges);
   const onInput = () => tracker.observe(palette.value);
   palette.addEventListener("input", onInput);
+  // A source may occur in several roll cards. Keep its toggle name shared.
+  const bindings = new Map<string, FlagBinding>();
+  for (const m of prepared.modifiers) if (!bindings.has(m.flag)) bindings.set(m.flag, { name: m.flag });
+  const views: { key: string; refresh: (force?: boolean) => void; rebuild: () => void; active: () => boolean }[] = [];
   host.append(el("h3", "式に加える補正（試用版）"));
   host.append(el("p", "補正を加えたい式を開き、使う効果にチェックを入れてください。最初はすべて未選択です。ゆとシートの命中・攻撃力などに反映済みの効果は、二重に足さないよう選ばないでください。"));
   host.append(el("p", "スキルレベルは出力時に計算し、CL・能力値は変数で残します。チェックは「式に組み込む」操作です。条件付きの効果は、卓中に0・1で切り替えてください。"));
@@ -36,7 +46,7 @@ export function mountCalculationEditor(host: HTMLElement, prepared: PreparedPale
       card.style.cssText = "margin:8px 0;padding:8px;border:1px solid #ddd;border-radius:6px;overflow-wrap:anywhere";
       const summary = el("summary", target.title); card.append(summary);
       const candidates = prepared.modifiers.filter(m => compatible(m, target));
-      const states = new Map<string, { checked: boolean; toggle: boolean; flag?: string }>();
+      const states = new Map<string, { checked: boolean; toggle: boolean }>();
       const preview = el("textarea"); preview.readOnly = true; preview.rows = 3;
       preview.setAttribute("aria-label", `${target.title}の候補式`);
       preview.style.cssText = "width:100%;box-sizing:border-box;margin-top:8px";
@@ -47,8 +57,9 @@ export function mountCalculationEditor(host: HTMLElement, prepared: PreparedPale
         for (const modifier of candidates) {
           const state = states.get(modifier.id);
           if (!state?.checked) continue;
-          if (state.toggle) state.flag = hooks.ensureFlag(modifier.flag);
-          selections.push({ modifier, flag: state.toggle ? state.flag : undefined });
+          const binding = bindings.get(modifier.flag)!;
+          if (state.toggle) binding.actual = hooks.ensureFlag(binding.actual ?? binding.name);
+          selections.push({ modifier, flag: state.toggle ? binding.actual : undefined });
         }
         preview.value = renderRoll(target, selections);
         tracker.observe(palette.value);
@@ -59,12 +70,14 @@ export function mountCalculationEditor(host: HTMLElement, prepared: PreparedPale
           message.textContent = "この式は手で編集されているため、上書きしていません。下の候補式をコピーし、必要な部分だけチャットパレットへ反映してください。";
         }
         summary.textContent = `${target.title}（選択 ${selections.length}件）`;
+        for (const view of views) view.refresh();
         hooks.changed();
       };
       if (target.kind === "hpSet") card.append(el("p", "これは「HPを○点にする」式です。通常のHP回復量を増やす補正は候補に含めていません。"));
       if (!candidates.length) card.append(el("p", "読み取れた補正候補はありません。必要な補正はチャットパレットで追加できます。"));
       for (const modifier of candidates) {
-        const state = { checked: false, toggle: modifier.conditional, flag: undefined as string | undefined };
+        const state = { checked: false, toggle: modifier.conditional };
+        const binding = bindings.get(modifier.flag)!;
         states.set(modifier.id, state);
         const box = el("div"); box.style.cssText = "margin:12px 0";
         const label = el("label"); label.style.cssText = "display:flex;gap:8px;align-items:flex-start;padding:6px 0";
@@ -79,10 +92,56 @@ export function mountCalculationEditor(host: HTMLElement, prepared: PreparedPale
         }
         mode.value = state.toggle ? "toggle" : "constant"; modeLabel.append(mode); box.append(modeLabel);
         const flagHelp = el("p"); flagHelp.style.cssText = "margin:4px 0;font-size:0.9em";
-        const updateFlagHelp = () => {
-          flagHelp.textContent = state.toggle ? `切り替え用：:${state.flag ?? modifier.flag}=1 / :${state.flag ?? modifier.flag}=0。未登録なら現在値0・最大値0のステータスを追加します。` : modifier.condition;
+        const rename = el("details"); rename.dataset.flagEditor = modifier.id;
+        rename.append(el("summary", "変数名を変更"));
+        const nameLabel = el("label", "補正用の変数名：");
+        const nameInput = el("input"); nameInput.type = "text"; nameInput.value = binding.actual ?? binding.name;
+        nameInput.placeholder = "例：WB"; nameInput.maxLength = 80;
+        nameInput.autocomplete = "off"; nameInput.spellcheck = false;
+        nameInput.style.cssText = "width:100%;max-width:24em;box-sizing:border-box;font-size:16px;margin:4px 0";
+        nameInput.setAttribute("aria-label", `${modifier.source}の補正用変数名`);
+        nameLabel.append(nameInput); rename.append(nameLabel);
+        const applyName = el("button", "名前を適用"); applyName.type = "button";
+        rename.append(applyName, el("p", "WBのように、{ }を付けずに入力します。同じ補正を使う式にも反映します。使用回数の名前は変えません。空欄で適用すると元の名前に戻ります。"));
+        const renameMessage = el("p"); renameMessage.setAttribute("aria-live", "polite"); rename.append(renameMessage);
+        const updateFlagHelp = (force = false) => {
+          const name = binding.actual ?? binding.name;
+          flagHelp.textContent = state.toggle ? `切り替え用：:${name}=1 / :${name}=0。未登録なら現在値0・最大値0のステータスを追加します。` : modifier.condition;
+          rename.hidden = !state.toggle;
+          // Keep a user's in-progress draft; synchronize other copies after applying.
+          if (force || !rename.open) nameInput.value = name;
         };
-        updateFlagHelp(); box.append(flagHelp);
+        const applyRename = () => {
+          try {
+            const next = validateFlagName(nameInput.value.trim() || modifier.flag);
+            const previous = binding.actual ?? binding.name;
+            for (const [key, other] of bindings) {
+              if (key !== modifier.flag && (other.actual ?? other.name) === next) {
+                throw new Error(`「${next}」は別の補正で使われています。別の名前にしてください。`);
+              }
+            }
+            tracker.observe(palette.value);
+            const actual = hooks.renameFlag(previous, next);
+            // Only names change, so tracked formulas remain editable through checkboxes.
+            tracker.renameFlag(previous, actual);
+            binding.name = actual;
+            if (binding.actual) binding.actual = actual;
+            const affected = views.filter(view => view.key === modifier.flag);
+            for (const fn of new Set(affected.filter(view => view.active()).map(view => view.rebuild))) fn();
+            for (const view of affected) view.refresh(true);
+            nameInput.value = actual;
+            renameMessage.textContent = `変数名を「${actual}」にしました。最後に「ココフォリアJSONをコピー」を押してください。`;
+            hooks.changed();
+          } catch (error) {
+            renameMessage.textContent = error instanceof Error ? error.message : "変数名を変更できませんでした。";
+          }
+        };
+        applyName.onclick = applyRename;
+        nameInput.onkeydown = event => {
+          if (event.key === "Enter" && !event.isComposing) { event.preventDefault(); applyRename(); }
+        };
+        views.push({ key: modifier.flag, refresh: updateFlagHelp, rebuild, active: () => state.checked && state.toggle });
+        updateFlagHelp(); box.append(flagHelp, rename);
         if (target.attack === "weapon" && (modifier.attack === "melee" || modifier.attack === "ranged")) {
           box.append(el("p", `${modifier.attack === "melee" ? "白兵" : "射撃"}攻撃専用です。この式を使う武器に適用できるか確認してください。`));
         }
@@ -107,6 +166,6 @@ export function mountCalculationEditor(host: HTMLElement, prepared: PreparedPale
     }
     host.append(review);
   }
-  host.append(el("p", "手で編集した式は自動で上書きしません。追加した切り替え用ステータスは、チェックを外しても残します。不要ならステータス欄から削除してください。"));
+  host.append(el("p", "手で編集した式は自動で上書きしません。変数名の変更時だけ、同じ名前の参照と操作コマンドを置き換えます。追加した切り替え用ステータスは、チェックを外しても残します。不要ならステータス欄から削除してください。"));
   return () => palette.removeEventListener("input", onInput);
 }
