@@ -1,14 +1,15 @@
 import { checkFlagRename, replaceFlagReferences, replaceStatusLabel } from "./calculation/flagNames";
 import { prepareCalculationPalette } from "./calculation/palette";
 import { mountCalculationEditor } from "./calculation/ui";
-import { emptyCalculationState, type CalculationEditor } from "./calculation/sessionState";
+import { emptyCalculationState, applyCalculationState, type CalculationEditor } from "./calculation/sessionState";
 import { buildCharacterJson } from "./ccfolia/buildCharacterJson";
 import { buildCommands } from "./ccfolia/buildCommands";
 import { buildMemo } from "./ccfolia/buildMemo";
 import { buildParams } from "./ccfolia/buildParams";
-import { buildStatus } from "./ccfolia/buildStatus";
-import { DEFAULT_CONSUMABLES, isKnownConsumableLabel } from "./items/consumables";
-import { buildPalette } from "./palette/buildPalette";
+import { buildStatus, buildPalette } from "./output/enhancements";
+import { createDefaultCalculationState } from "./calculation/defaults";
+import { isSheetConsumableLabel } from "./items/tableConsumables";
+import { DEFAULT_CONSUMABLES } from "./items/consumables";
 import { fetchYtsheetJson } from "./ytsheet/fetchYtsheet";
 import { parseYtsheet } from "./ytsheet/parseYtsheet";
 import { characterJson, generateSessionBase, metadataOnly } from "./session/generation";
@@ -60,7 +61,7 @@ CL 3</pre>
   <p>この設定は表示用です。理力符の使用宣言を送るだけで属性が切り替わったり、消費したりする処理は追加していません。ダメージの数値や適用する防御力は別に確認してください。</p>
   <h3>判定・ダメージ・回復量の補正</h3>
   <p>読み取れた魔法攻撃のダメージやHP・MPの回復量は、スキルの判定式の下に出力します。プロテクション・ディスコードのように効果をダイスで求めるスキルやレイズは、<code>5D プロテクション</code>、<code>2D レイズ</code> のようにスキル名を付けたロールを出します。ダイス数は各スキルの効果文とレベルから求め、読めない式は推測しません。「式に加える補正」で対象の式を開き、加えたい効果にチェックを入れてください。スキルレベルは計算し、CLや能力値は変数のまま残します。</p>
-  <p>補正は新規出力時は未選択です。ゆとシートの合計値に反映済みの効果を選ぶと二重に加算されるため、元の効果文と適用対象を確認してください。攻撃用・HP回復用・MP回復用の補正は分けて扱います。「HPを○点にする」式には通常の回復量増加を加えません。</p>
+  <p>新規出力時は、判定・回復量・スキルの効果の補正は未選択、ダメージの補正は選択済みです。保存から再開した場合は保存した選択を優先します。ゆとシートの合計値に反映済みの効果を選ぶと二重に加算されるため、元の効果文と適用対象を確認してください。攻撃用・HP回復用・MP回復用の補正は分けて扱います。「HPを○点にする」式には通常の回復量増加を加えません。</p>
   <p>補正のチェックは、式に組み込む操作です。条件付きの効果で「0・1で切り替え」を選ぶと、必要なステータスを現在値0・最大値0で追加します。卓中は対応するステータスを1にすると有効、0にすると無効になります。未対応の条件や効果の書き換えは手動で調整してください。</p>
   <p>同じ内容の共通判定が複数の見出しにある場合、補正欄では一つにまとめ、チェックを変えると該当する行へまとめて反映します。スキルごとの判定や、元の式・適用対象が異なるものは別に扱います。以前の保存で共通判定の選択が異なる場合は勝手に統一せず、混在表示にします。チェックや加算方法を変更した補正から統一されます。</p>
   <p>未登録の名前を変数一覧から使う場合は、ステータス欄にも追加してください。</p>
@@ -68,6 +69,15 @@ CL 3</pre>
   <p>補正用の名前を短くしたいときは、「0・1で切り替え」の下にある「変数名を変更」を開き、WBなどを入力して「名前を適用」を押します。同じ補正を使う式、ステータス、変数一覧に反映し、使用回数の名前は変えません。手で編集した式は数式を作り直さず、変数名だけを置き換えます。空欄で適用すると元の名前に戻ります。</p>
   <p>単一の能力値は <code>{スマッシュ}*{筋力}</code> のように出力します。合計を掛ける式では <code>{補正}*({筋力}+3)</code> のように括弧を残します。能力値のパラメータを数値ではなく複合式に手で変える場合は、参照した式の計算順も確認してください。</p>
   <p>追加した切り替え用ステータスはチェックを外しても残ります。不要なものはステータス欄で削除できます。「元の効果文・条件を確認する」から原文を参照してください。</p>
+  <h3>消耗品の自動出力</h3>
+  <p>次の表形式でアイテム欄を記入した場合のみ、消耗品の名前・個数・使用タイミング・効果のロールをまとめてステータスとチャットパレットへ反映します。列の順番は「名前｜個数｜効果｜説明｜重量」です。効果の先頭に使用タイミングを書き、効果欄に「消耗品」を含めてください。名前は略さず、記入した名前を使います。</p>
+  <pre style='white-space:pre-wrap;overflow-wrap:anywhere'>|ハイHPポーション|3|マイナーアクション、メジャーアクション。HP回復を行なう。使用者の【HP】を［4D］点回復する。消耗品。|効果の高いHPポーション。|@[1*3]|</pre>
+  <p>この例では「ハイHPポーション 3 0」と、マイナー・メジャーそれぞれに使用宣言、消費コマンド、4Dのロールを出します。└・┗などの行頭の罫線と重量の記載は個数に数えません。同じ名前・効果の行は個数を合計します。個数0は0のまま扱います。使用タイミングや個数を読めない行は自動出力せず、回復量だけ読めない場合は宣言と消費コマンドを出してロールを要確認にします。</p>
+  <p>従来のHPP*3などの簡易表記は個数の読み取りだけ残しています。表形式で読み取れたアイテムと重複する手入力用ひな形は省き、それ以外のHPP・MPP・HHPP・HMPP・毒消しのひな形は従来どおり残します。自動で読めなかったものは手で追加してください。</p>
+  <h3>全判定・精神リアクションと装備の補正</h3>
+  <p>「あらゆる判定」の補正は全種類の判定に選択できますが、ダメージや回復量には加えません。精神判定には強心丹Dを加え、強心丹の使用後は1、終了後は0にします。所持数の「強心丹」と補正用の「強心丹D」は別々です。</p>
+  <p>リソース操作に精神判定（リアクション）を出します。《ベアアップ》（ペアアップ表記も対応）を取得している場合だけ、この式に+1Dします。通常の精神判定は増やさず、補正候補にも重ねて出しません。この+1Dの式はスキルに対するリアクション用です。</p>
+  <p>装備の加算方法は、効果文にパッシブとあれば常時加算、DRの直前・直後や効果参照などの使用タイミングがあれば0・1で切り替えが初期値です。条件付きのパッシブは適用条件を確認し、必要なら切り替え方式へ変えてください。攻撃スキル自身のダメージ増加はそのスキルの式にだけ加算します。攻撃を可能にする効果や、武器を説明しているだけの記載からはダメージ式を作りません。</p>
   <h3>注意</h3>
   <p>このツールは、ゆとシートの内容からココフォリア用のコマを作る補助ツールです。スキル効果の条件付き補正までは完全自動では処理しません。必要な補正は、チャットパレット編集用の変数一覧を見ながら手動で足してください。</p>
   <p>チャットパレットを編集した後は、必ず<strong>ココフォリアJSONをコピー</strong>を押してください。表示されているJSONにも編集内容が反映されます。</p>
@@ -79,17 +89,18 @@ let disposeCalculationEditor: CalculationEditor | undefined;
 let activeSource: { raw: Record<string, unknown>; url: string; useFormula: boolean; metadata: string } | undefined;
 type NamedValue = { label?: unknown; value?: unknown; max?: unknown };
 type CcfoliaCharacterJson = { data?: { commands?: string; status?: unknown[]; params?: unknown[]; color?: string; [key: string]: unknown }; [key: string]: unknown };
-const BASE_STATUS_LABELS = ["HP", "MP", "フェイト", "移動力", "物理防御力", "魔法防御力", "携帯可能重量", "判定BD", "命中BD", "回避BD", "ダメBD", "ダメバフ", "EP", "所持金"];
+const BASE_STATUS_LABELS = ["HP", "MP", "フェイト", "移動力", "物理防御力", "魔法防御力", "携帯可能重量", "判定BD", "命中BD", "回避BD", "ダメBD", "ダメバフ", "EP", "所持金", "強心丹D"];
 const DEFAULT_CONSUMABLE_LABELS = DEFAULT_CONSUMABLES.map(item => item.label);
 const area = (id: string) => document.getElementById(id) as HTMLTextAreaElement;
 function editableSnapshot(): string { return JSON.stringify([area("statusEdit").value, area("paramsEdit").value, area("palette").value, area("outjson").value, disposeCalculationEditor?.getState()]); }
 function labelOf(item: unknown): string | null { const label = (item as NamedValue)?.label; return typeof label === "string" && label.trim() ? label.trim() : null; }
 function unique(values: string[]): string[] { return [...new Set(values.filter(Boolean))]; }
+function isCurrentConsumableLabel(label: string): boolean { return isSheetConsumableLabel(activeSource?.raw ?? {}, label); }
 function buildVariableText(status: unknown[], params: unknown[], skillNames: string[] = []): string {
   const statusLabels = unique(status.map(labelOf).filter((v): v is string => !!v)), paramLabels = unique(params.map(labelOf).filter((v): v is string => !!v));
-  const consumableLabels = statusLabels.filter(isKnownConsumableLabel), extraStatusFlags = statusLabels.filter(label => !BASE_STATUS_LABELS.includes(label) && !isKnownConsumableLabel(label));
+  const consumableLabels = statusLabels.filter(isCurrentConsumableLabel), extraStatusFlags = statusLabels.filter(label => !BASE_STATUS_LABELS.includes(label) && !isCurrentConsumableLabel(label));
   const allSkillFlags = unique([...skillNames, ...extraStatusFlags]), optionalConsumableLabels = consumableLabels.filter(label => !DEFAULT_CONSUMABLE_LABELS.includes(label));
-  const lines = ["### ■よく使う補正", "{判定BD}D", "{命中BD}D", "{回避BD}D", "{ダメBD}D", "{ダメバフ}", "", "### ■ダメージ属性", "{ダメージ属性}"];
+  const lines = ["### ■よく使う補正", "{判定BD}D", "{命中BD}D", "{回避BD}D", "{ダメBD}D", "{ダメバフ}", "{強心丹D}", ":強心丹D=1", ":強心丹D=0", "", "### ■ダメージ属性", "{ダメージ属性}"];
   if (allSkillFlags.length) { lines.push("", "### ■スキル・フラグ候補"); for (const label of allSkillFlags) lines.push(`{${label}}`, `{${label}}D`, `:${label}=1`, `:${label}=0`); }
   if (optionalConsumableLabels.length) { lines.push("", "### ■消耗品コマンド"); for (const label of optionalConsumableLabels) lines.push(`:${label}-1`); }
   lines.push("", "### ■基本ステータス"); for (const label of statusLabels) lines.push(`{${label}}`);
@@ -113,7 +124,7 @@ function ensureCorrectionFlag(requested: string): string {
   let label = requested, suffix = 0;
   while (true) {
     const existing = statuses.find(s => s.label === label);
-    if (!parameters.some(p => p.label === label) && !BASE_STATUS_LABELS.includes(label) && !isKnownConsumableLabel(label)) {
+    if (!parameters.some(p => p.label === label) && !BASE_STATUS_LABELS.includes(label) && !isCurrentConsumableLabel(label)) {
       if (existing && Number(existing.max) === 0 && Number.isFinite(Number(existing.value))) return label; if (!existing) break;
     }
     label = `${requested}_補正${suffix++ || ""}`;
@@ -122,7 +133,7 @@ function ensureCorrectionFlag(requested: string): string {
 }
 function renameCorrectionFlag(previous: string, requested: string): string {
   const s = area("statusEdit"), p = area("paramsEdit"), palette = area("palette");
-  const name = checkFlagRename(previous, requested, parseStatusText(s.value), parseParamsText(p.value), palette.value, label => BASE_STATUS_LABELS.includes(label) || label === "initiative" || isKnownConsumableLabel(label));
+  const name = checkFlagRename(previous, requested, parseStatusText(s.value), parseParamsText(p.value), palette.value, label => BASE_STATUS_LABELS.includes(label) || label === "initiative" || isCurrentConsumableLabel(label));
   s.value = replaceStatusLabel(s.value, previous, name); p.value = replaceFlagReferences(p.value, previous, name); palette.value = replaceFlagReferences(palette.value, previous, name); return name;
 }
 function refreshVariableHelpers(): void { latestVars = buildVariableText(parseStatusText(area("statusEdit").value), parseParamsText(area("paramsEdit").value), latestSkillNames); area("vars").value = latestVars; }
@@ -188,7 +199,11 @@ export const sessionBridge = {
     disposeCalculationEditor?.(); latest = JSON.stringify(cc,null,2); latestSkillNames = unique(sheet.skills.map(s => s.name));
     activeSource = { raw, url, useFormula, metadata: metadataOnly(latest) };
     area("outjson").value = latest; area("statusEdit").value = statusToText(status); area("paramsEdit").value = paramsToText(params); area("palette").value = prepared.text; refreshVariableHelpers();
-    disposeCalculationEditor = mountCalculationEditor(document.getElementById("calculationEditor")!,prepared,area("palette"),{ ensureFlag: ensureCorrectionFlag, renameFlag: renameCorrectionFlag, changed: refreshVariableHelpers });
+    const calculation = createDefaultCalculationState(prepared, ensureCorrectionFlag);
+    const selectedPrepared = applyCalculationState(prepared, calculation);
+    area("palette").value = selectedPrepared.text;
+    disposeCalculationEditor = mountCalculationEditor(document.getElementById("calculationEditor")!,selectedPrepared,area("palette"),{ ensureFlag: ensureCorrectionFlag, renameFlag: renameCorrectionFlag, changed: refreshVariableHelpers }, calculation);
+    refreshOutputJsonFromEditedFields();
     outputSnapshot = editableSnapshot();
     const warnings = [...generated.warnings]; if (prepared.reviews.length) warnings.push(`自動で式にできない効果が${prepared.reviews.length}件あります。「式に加える補正」の要確認欄を確認してください。`);
     warn.textContent = warnings.join("\n") || "OK"; document.dispatchEvent(new Event("ytsheet:generated"));

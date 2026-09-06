@@ -1,9 +1,8 @@
 import { buildCharacterJson } from "../ccfolia/buildCharacterJson";
 import { buildMemo } from "../ccfolia/buildMemo";
 import { buildParams } from "../ccfolia/buildParams";
-import { buildStatus } from "../ccfolia/buildStatus";
-import { isKnownConsumableLabel } from "../items/consumables";
-import { buildPalette } from "../palette/buildPalette";
+import { buildStatus, buildPalette } from "../output/enhancements";
+import { isSheetConsumableLabel } from "../items/tableConsumables";
 import { detectUsageLimit } from "../palette/detectUsageLimit";
 import { parseYtsheet } from "../ytsheet/parseYtsheet";
 import { prepareCalculationPalette } from "../calculation/palette";
@@ -26,7 +25,7 @@ export function characterJson(fields: Fields): string {
   });
   return JSON.stringify({ ...meta, data: { ...meta.data, status: parse(fields.statusEdit, true), params: parse(fields.paramsEdit, false), commands: fields.palette } }, null, 2);
 }
-const numericFlags = ["判定BD", "命中BD", "回避BD", "ダメBD", "ダメバフ"];
+const numericFlags = ["判定BD", "命中BD", "回避BD", "ダメBD", "ダメバフ", "強心丹D"];
 const reservedFlags = ["HP", "MP", "フェイト", "移動力", "物理防御力", "魔法防御力", "携帯可能重量", "EP", "所持金", "initiative", ...numericFlags];
 
 export function generateSessionBase(raw: Record<string, unknown>, url: string, useFormula: boolean, state = emptyCalculationState()) {
@@ -59,7 +58,7 @@ export function generateSessionBase(raw: Record<string, unknown>, url: string, u
   const flagLabels = new Set([...selectedFlags, ...calculation.flags.filter(f => f.actual).map(f => f.actual!)]);
   for (const name of flagLabels) {
     const existing = status.find(s => s.label === name);
-    if (reservedFlags.includes(name) || isKnownConsumableLabel(name) || params.some(p => p.label === name) || (existing && Number(existing.max) !== 0)) {
+    if (reservedFlags.includes(name) || isSheetConsumableLabel(raw, name) || params.some(p => p.label === name) || (existing && Number(existing.max) !== 0)) {
       throw new Error(`補正名「${name}」が回数・能力値などと重なります。更新前に補正名を変更してください。`);
     }
     if (!existing) status.push({ label: name, value: "0", max: "0" });
@@ -77,7 +76,7 @@ export function generateSessionBase(raw: Record<string, unknown>, url: string, u
   for (const s of status) {
     if (["HP", "MP", "フェイト"].includes(s.label) || limitNames.has(s.label)) reset.set(s.label, [s.label, s.max, s.max]);
     else if (toggles.has(s.label) || flagLabels.has(s.label) || numericFlags.includes(s.label)) reset.set(s.label, [s.label, "0", s.max]);
-    else if (isKnownConsumableLabel(s.label) || s.label === "EP") reset.set(s.label, [s.label, s.value, s.max]);
+    else if (isSheetConsumableLabel(raw, s.label) || s.label === "EP") reset.set(s.label, [s.label, s.value, s.max]);
   }
   return { key, sheet, prepared, calculation, fields, reset, warnings: [...new Set(warnings)] };
 }

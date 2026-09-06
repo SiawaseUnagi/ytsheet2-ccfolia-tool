@@ -1,5 +1,6 @@
 import type { ParsedSheet, YtSkill } from "../ytsheet/types";
 import { leadingAmount, normalizeEffect, type Amount } from "./expression";
+import { directAttackKind, equipmentToggle, isBearUp } from "./attack";
 
 export type RollKind = "check" | "damage" | "hpHeal" | "mpHeal" | "hpSet" | "effect";
 export type AttackKind = "weapon" | "melee" | "ranged" | "magic";
@@ -16,14 +17,7 @@ export type Modifier = {
 export type Review = { source: string; reason: string; effect: string };
 export type Analysis = { modifiers: Modifier[]; reviews: Review[] };
 
-export function attackKind(skill: YtSkill): AttackKind | undefined {
-  const text = normalizeEffect(skill.effect);
-  if (/魔法攻撃を行(?:な)?う/.test(text)) return "magic";
-  if (/白兵攻撃を行(?:な)?う/.test(text)) return "melee";
-  if (/射撃攻撃を行(?:な)?う/.test(text)) return "ranged";
-  if (/武器攻撃を行(?:な)?う/.test(text)) return "weapon";
-  return undefined;
-}
+export function attackKind(skill: YtSkill): AttackKind | undefined { return directAttackKind(skill); }
 
 export function skillRolls(skill: YtSkill, index: number, reviews: Review[]): RollTarget[] {
   const effect = normalizeEffect(skill.effect);
@@ -65,7 +59,6 @@ export function skillRolls(skill: YtSkill, index: number, reviews: Review[]): Ro
       const increase = match[1] === "+" && /ダメージ増加/.test(effect);
       if (!reduction && !increase) continue;
       const value = leadingAmount(sentence.slice(match.index + match[0].length), skill.level);
-      // No guesses from page numbers, examples, dice-roll instructions or ambiguous expressions.
       if (!value || !/^(?:点)?(?:する|させる|$)/.test(value.rest) || value.amount.dice === "0") continue;
       if (/^[-]/.test(value.amount.dice) || /^[-]/.test(value.amount.fixed)) continue;
       support.push(value.amount);
@@ -74,12 +67,10 @@ export function skillRolls(skill: YtSkill, index: number, reviews: Review[]): Ro
     else if (support.length > 1) reviews.push({ source: skill.name, reason: "効果のダイス式が複数あるため、どれを使うか確認してください。", effect: skill.effect });
   }
   if (/(?:HP|MP).*回復|回復.*(?:HP|MP)/.test(effect) && targets.every(t => t.kind !== "hpHeal" && t.kind !== "mpHeal" && t.kind !== "hpSet")) {
-    // A recovery boost is not a recovery action in its own right.
     if (!/回復[^。]*に\s*[+\-]/.test(effect)) reviews.push({ source: skill.name, reason: "回復量の式を確定できません。消費数・割合・上限などを確認してください。", effect: skill.effect });
   }
   return targets;
 }
-
 function attackScope(text: string): AttackKind | undefined {
   if (/白兵攻撃/.test(text)) return "melee";
   if (/射撃攻撃/.test(text)) return "ranged";
@@ -87,11 +78,12 @@ function attackScope(text: string): AttackKind | undefined {
   if (/武器(?:攻撃|を使用)/.test(text)) return "weapon";
   return undefined;
 }
-
 function classify(prefix: string, full: string): Partial<Modifier> | null {
-  if (/(?:あらゆる|すべての)ダイスロール/.test(prefix)) {
+  if (/(?:あらゆる|すべての|全ての)ダイスロール/.test(prefix)) {
     return { kinds: ["check", "damage", "hpHeal", "mpHeal", "hpSet", "effect"], diceOnly: true };
   }
+  // Checks are not damage rolls, recovery amounts or standalone effect rolls.
+  if (/(?:あらゆる|すべての|全ての|すべて|全て|全)判定/.test(prefix)) return { kinds: ["check"] };
   if (/回復/.test(prefix) && /効果|回復量|回復/.test(prefix)) {
     if (/受ける|受けた|受けて/.test(prefix)) return null;
     const hp = /HP/.test(prefix), mp = /MP/.test(prefix);
@@ -108,7 +100,6 @@ function classify(prefix: string, full: string): Partial<Modifier> | null {
   }
   return null;
 }
-
 export function analyzeModifiers(sheet: ParsedSheet): Analysis {
   const modifiers: Modifier[] = [], reviews: Review[] = [];
   const sources = sheet.skills.map((skill, index) => ({ name: skill.name, level: skill.level, timing: skill.timing,
@@ -119,16 +110,17 @@ export function analyzeModifiers(sheet: ParsedSheet): Analysis {
     if (name && effect) sources.push({ name, level: 0, timing: "装備", effect, usage: "", ownAttack: undefined, skill: undefined, id: `item-${slot}` });
   }
   for (const source of sources) {
+    if (source.skill && isBearUp(source.name)) continue; // Included only in the dedicated spirit reaction roll.
     const full = normalizeEffect(`${source.effect} ${source.usage}`);
     const relevant = /(?:ダメージ|回復|判定|ダイスロール)[^。]*に\s*[+\-]/.test(full);
     if (!relevant) continue;
     if (/[{}\r\n]/.test(source.name)) { reviews.push({ source: source.name, reason: "変数名として使えない文字を含むため手動で調整してください。", effect: source.effect }); continue; }
-    // Do not reinterpret replacement text, examples, or effects that modify another skill.
     if (/(?:《[^》]+》の(?:「?効果|ダメージ)|「効果」)[^。]*(?:変更|追加)|効果を[^。]*変更/.test(full)) {
       reviews.push({ source: source.name, reason: "別スキルの効果を書き換えるため、自動では加算しません。", effect: source.effect }); continue;
     }
-    let found = false;
-    for (const sentence of normalizeEffect(source.effect).split("。")) {
+    let found = false, offset = 0;
+    const normalized = normalizeEffect(source.effect);
+    for (const sentence of normalized.split("。")) {
       for (const m of sentence.matchAll(/に\s*([+\-])\s*/g)) {
         const prefix = sentence.slice(0, m.index);
         const type = classify(prefix, full);
@@ -141,25 +133,25 @@ export function analyzeModifiers(sheet: ParsedSheet): Analysis {
         } : parsed.amount;
         if (source.timing === "装備" && /SL/.test(sentence.slice(m.index))) continue;
         const active = !/パッシブ|装備/.test(source.timing) && !source.ownAttack;
-        const conditional = active || /時|場合|いる間|効果中|クリティカル|場所|受けている|終了まで|暗闇|狂戦士化/.test(full) || /装備|使用/.test(source.usage);
+        const conditionInText = active || /時|場合|いる間|効果中|クリティカル|場所|受けている|終了まで|暗闇|狂戦士化/.test(full) || /装備|使用/.test(source.usage);
+        const conditional = source.timing === "装備" ? equipmentToggle(normalized.slice(0, offset + m.index!), conditionInText) : conditionInText;
         const limited = /(?:シーン|シナリオ|ラウンド).{0,12}回/.test(source.usage);
-        // Equipment can use its own name; ensureCorrectionFlag handles existing-name collisions.
         const flag = limited || /^(?:HP|MP|CL|フェイト|攻撃力|移動力)$/.test(source.name) ? `${source.name}_補正` : source.name;
         modifiers.push({ id: `${source.id}-${modifiers.length}`, source: source.name,
           level: source.timing === "装備" ? undefined : source.level,
           effect: `${source.effect}${source.usage && source.usage !== "―" ? ` 使用条件：${source.usage}` : ""}`,
           amount, kinds: type.kinds, ...type, attribute: /[〈<]([^〉>]+)[〉>]属性/.exec(prefix)?.[1], flag, conditional,
-          condition: conditional ? "条件・持続時間・適用対象を原文で確認してください。" : "ゆとシートに反映済みなら選ばないでください。",
+          condition: conditionInText ? "条件・持続時間・適用対象を原文で確認してください。" : "ゆとシートに反映済みなら選ばないでください。",
           onlySkill: source.ownAttack ? source.name : undefined });
         found = true;
       }
+      offset += sentence.length + 1;
     }
     const hasEffectRoll = source.skill && skillRolls(source.skill, 0, []).some(t => t.kind === "effect");
     if (!found && !hasEffectRoll) reviews.push({ source: source.name, reason: "補正の対象または数式を確定できません。手動で調整してください。", effect: source.effect });
   }
   return { modifiers, reviews };
 }
-
 export function compatible(modifier: Modifier, target: RollTarget): boolean {
   if (!modifier.kinds.includes(target.kind)) return false;
   if (modifier.attribute && modifier.attribute !== target.attribute) return false;
@@ -172,7 +164,6 @@ export function compatible(modifier: Modifier, target: RollTarget): boolean {
   if (modifier.attack === "magic" && target.attack !== "magic") return false;
   if (modifier.attack && modifier.attack !== "magic") {
     if (!target.attack || target.attack === "magic") return false;
-    // Generic weapon lines have no melee/ranged information: show a warning in the UI.
     if (modifier.attack !== "weapon" && target.attack !== "weapon" && modifier.attack !== target.attack) return false;
   }
   return true;
