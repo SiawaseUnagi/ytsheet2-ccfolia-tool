@@ -1,6 +1,7 @@
 import { checkFlagRename, replaceFlagReferences, replaceStatusLabel } from "./calculation/flagNames";
 import { prepareCalculationPalette } from "./calculation/palette";
 import { mountCalculationEditor } from "./calculation/ui";
+import { emptyCalculationState, type CalculationEditor } from "./calculation/sessionState";
 import { buildCharacterJson } from "./ccfolia/buildCharacterJson";
 import { buildCommands } from "./ccfolia/buildCommands";
 import { buildMemo } from "./ccfolia/buildMemo";
@@ -10,6 +11,8 @@ import { DEFAULT_CONSUMABLES, isKnownConsumableLabel } from "./items/consumables
 import { buildPalette } from "./palette/buildPalette";
 import { fetchYtsheetJson } from "./ytsheet/fetchYtsheet";
 import { parseYtsheet } from "./ytsheet/parseYtsheet";
+import { characterJson, generateSessionBase, metadataOnly } from "./session/generation";
+import { type Fields, type Snapshot } from "./session/model";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 app.innerHTML = `<main style="max-width:1000px;margin:auto;padding:16px;font-family:sans-serif">
@@ -43,7 +46,7 @@ app.innerHTML = `<main style="max-width:1000px;margin:auto;padding:16px;font-fam
     <li>ココフォリアの盤面で右クリックし、<strong>クリップボードから貼り付け</strong>でキャラクターコマを作成します。</li>
   </ol>
   <h3>プリプレイ宣言</h3>
-  <p>タイミングが「アイテム」のスキルと、効果文が「プリプレイで」から始まるスキルは、チャットパレットのプリプレイ欄にまとめて出力します。1行の中に改行用の <code>\n</code> を入れているので、その行を押すだけで複数の宣言をまとめて発言できます。</p>
+  <p>タイミングが「アイテム」のスキルと、効果文が「プリプレイで」から始まるスキルは、チャットパレットのプリプレイ欄にまとめて出力します。1行の中に改行用の <code>\\n</code> を入れているので、その行を押すだけで複数の宣言をまとめて発言できます。</p>
   <h3>パラメータ出力</h3>
   <p>「パラメータをゆとシート標準寄せの参照式で出力する」にチェックが入っていると、<code>命中 {器用判定}-1</code> のような参照式で出力します。チェックを外すと、同じ変数名のまま <code>命中 5</code> のように数値を直接入れて出力します。</p>
   <h3>編集欄について</h3>
@@ -57,9 +60,9 @@ CL 3</pre>
   <p>この設定は表示用です。理力符の使用宣言を送るだけで属性が切り替わったり、消費したりする処理は追加していません。ダメージの数値や適用する防御力は別に確認してください。</p>
   <h3>判定・ダメージ・回復量の補正</h3>
   <p>読み取れた魔法攻撃のダメージやHP・MPの回復量は、スキルの判定式の下に出力します。「式に加える補正」で対象の式を開き、加えたい効果にチェックを入れてください。スキルレベルは計算し、CLや能力値は変数のまま残します。</p>
-  <p>補正は最初はすべて未選択です。ゆとシートの合計値に反映済みの効果を選ぶと二重に加算されるため、元の効果文と適用対象を確認してください。攻撃用・HP回復用・MP回復用の補正は分けて扱います。「HPを○点にする」式には通常の回復量増加を加えません。</p>
+  <p>補正は新規出力時は未選択です。ゆとシートの合計値に反映済みの効果を選ぶと二重に加算されるため、元の効果文と適用対象を確認してください。攻撃用・HP回復用・MP回復用の補正は分けて扱います。「HPを○点にする」式には通常の回復量増加を加えません。</p>
   <p>条件付きの効果は「0・1で切り替え」を選ぶと、必要なステータスを現在値0・最大値0で追加します。卓中は対応するステータスを1にすると有効、0にすると無効になります。未対応の条件や効果の書き換えは手動で調整してください。</p>
-  <p>チェックの変更は対象の式だけに反映します。その式を手で編集した後は自動で上書きせず、候補式を表示します。編集を最初からやり直す「出力」は、変更内容を破棄するか確認してから再生成します。</p>
+  <p>チェックの変更は対象の式だけに反映します。その式を手で編集した後は自動で上書きせず、候補式を表示します。編集を最初からやり直す「出力」は、変更内容を破棄するか確認してから再生成します。編集を残してキャラシを更新するときは「更新を反映」を使ってください。</p>
   <p>補正用の名前を短くしたいときは、「0・1で切り替え」の下にある「変数名を変更」を開き、WBなどを入力して「名前を適用」を押します。同じ補正を使う式、ステータス、変数一覧に反映し、使用回数の名前は変えません。手で編集した式は数式を作り直さず、変数名だけを置き換えます。空欄で適用すると元の名前に戻ります。</p>
   <h3>注意</h3>
   <p>このツールは、ゆとシートの内容からココフォリア用のコマを作る補助ツールです。スキル効果の条件付き補正までは完全自動では処理しません。必要な補正は、チャットパレット編集用の変数一覧を見ながら手動で足してください。</p>
@@ -67,267 +70,127 @@ CL 3</pre>
 </section>
 </main>`;
 
-let latest = "";
-let latestVars = "";
-let latestSkillNames: string[] = [];
-let disposeCalculationEditor: (() => void) | undefined;
-let outputSnapshot = "";
-
-function editableSnapshot(): string {
-  return ["statusEdit", "paramsEdit", "palette"].map(id => (document.getElementById(id) as HTMLTextAreaElement).value).join("\0");
+let latest = "", latestVars = "", latestSkillNames: string[] = [], outputSnapshot = "";
+let disposeCalculationEditor: CalculationEditor | undefined;
+let activeSource: { raw: Record<string, unknown>; url: string; useFormula: boolean; metadata: string } | undefined;
+type NamedValue = { label?: unknown; value?: unknown; max?: unknown };
+type CcfoliaCharacterJson = { data?: { commands?: string; status?: unknown[]; params?: unknown[]; color?: string; [key: string]: unknown }; [key: string]: unknown };
+const BASE_STATUS_LABELS = ["HP", "MP", "フェイト", "移動力", "物理防御力", "魔法防御力", "携帯可能重量", "判定BD", "命中BD", "回避BD", "ダメBD", "ダメバフ", "EP", "所持金"];
+const DEFAULT_CONSUMABLE_LABELS = DEFAULT_CONSUMABLES.map(item => item.label);
+const area = (id: string) => document.getElementById(id) as HTMLTextAreaElement;
+function editableSnapshot(): string { return JSON.stringify([area("statusEdit").value, area("paramsEdit").value, area("palette").value, area("outjson").value, disposeCalculationEditor?.getState()]); }
+function labelOf(item: unknown): string | null { const label = (item as NamedValue)?.label; return typeof label === "string" && label.trim() ? label.trim() : null; }
+function unique(values: string[]): string[] { return [...new Set(values.filter(Boolean))]; }
+function buildVariableText(status: unknown[], params: unknown[], skillNames: string[] = []): string {
+  const statusLabels = unique(status.map(labelOf).filter((v): v is string => !!v)), paramLabels = unique(params.map(labelOf).filter((v): v is string => !!v));
+  const consumableLabels = statusLabels.filter(isKnownConsumableLabel), extraStatusFlags = statusLabels.filter(label => !BASE_STATUS_LABELS.includes(label) && !isKnownConsumableLabel(label));
+  const allSkillFlags = unique([...skillNames, ...extraStatusFlags]), optionalConsumableLabels = consumableLabels.filter(label => !DEFAULT_CONSUMABLE_LABELS.includes(label));
+  const lines = ["### ■よく使う補正", "{判定BD}D", "{命中BD}D", "{回避BD}D", "{ダメBD}D", "{ダメバフ}", "", "### ■ダメージ属性", "{ダメージ属性}"];
+  if (allSkillFlags.length) { lines.push("", "### ■スキル・フラグ候補"); for (const label of allSkillFlags) lines.push(`{${label}}`, `{${label}}D`, `:${label}=1`, `:${label}=0`); }
+  if (optionalConsumableLabels.length) { lines.push("", "### ■消耗品コマンド"); for (const label of optionalConsumableLabels) lines.push(`:${label}-1`); }
+  lines.push("", "### ■基本ステータス"); for (const label of statusLabels) lines.push(`{${label}}`);
+  lines.push("", "### ■判定・能力値"); for (const label of paramLabels) lines.push(`{${label}}`);
+  lines.push("", "### ■式の部品", "({命中ダイス}+{判定BD}+{命中BD})D+{命中}", "({回避ダイス}+{判定BD}+{回避BD})D+{回避}", "({魔術判定ダイス}+{判定BD}+{命中BD})D+{魔術判定}", "({攻撃ダイス}+{ダメBD})D+{攻撃力}+{ダメバフ}", "c(-{物理防御力})", "c(-{魔法防御力})");
+  return lines.join("\n");
 }
-
+function statusToText(status: unknown[]): string { return status.map(s => { const item = s as NamedValue; return [item.label ?? "", item.value ?? "0", item.max ?? "0"].join("\t"); }).join("\n"); }
+function paramsToText(params: unknown[]): string { return params.map(p => { const item = p as NamedValue; return [item.label ?? "", item.value ?? "0"].join("\t"); }).join("\n"); }
+function splitEditableLine(line: string): string[] {
+  if (line.includes("\t")) return line.split("\t"); if (/[=＝,，/]/.test(line)) return line.split(/\s*[=＝,，/]\s*/); return line.split(/\s+/);
+}
+function parseStatusText(text: string) {
+  return text.split(/\r?\n/).map(line => line.trim()).filter(Boolean).map(line => { const parts = splitEditableLine(line); return { label: parts[0]?.trim() ?? "", value: String(parts[1] ?? "0").trim(), max: String(parts[2] ?? "0").trim() }; }).filter(s => s.label);
+}
+function parseParamsText(text: string) {
+  return text.split(/\r?\n/).map(line => line.trim()).filter(Boolean).map(line => { const parts = splitEditableLine(line); return { label: parts[0]?.trim() ?? "", value: String(parts[1] ?? "0").trim() }; }).filter(p => p.label);
+}
 function ensureCorrectionFlag(requested: string): string {
-  const input = document.getElementById("statusEdit") as HTMLTextAreaElement;
-  const statuses = parseStatusText(input.value);
-  const parameters = parseParamsText((document.getElementById("paramsEdit") as HTMLTextAreaElement).value);
-  let label = requested;
-  let suffix = 0;
+  const input = area("statusEdit"), statuses = parseStatusText(input.value), parameters = parseParamsText(area("paramsEdit").value);
+  let label = requested, suffix = 0;
   while (true) {
     const existing = statuses.find(s => s.label === label);
     if (!parameters.some(p => p.label === label) && !BASE_STATUS_LABELS.includes(label) && !isKnownConsumableLabel(label)) {
-      if (existing && Number(existing.max) === 0 && Number.isFinite(Number(existing.value))) return label;
-      if (!existing) break;
+      if (existing && Number(existing.max) === 0 && Number.isFinite(Number(existing.value))) return label; if (!existing) break;
     }
     label = `${requested}_補正${suffix++ || ""}`;
   }
-  input.value = `${input.value.trimEnd()}${input.value.trim() ? "\n" : ""}${label}\t0\t0`;
-  return label;
+  input.value = `${input.value.trimEnd()}${input.value.trim() ? "\n" : ""}${label}\t0\t0`; return label;
 }
-
 function renameCorrectionFlag(previous: string, requested: string): string {
-  const statusInput = document.getElementById("statusEdit") as HTMLTextAreaElement;
-  const paramsInput = document.getElementById("paramsEdit") as HTMLTextAreaElement;
-  const paletteInput = document.getElementById("palette") as HTMLTextAreaElement;
-  const name = checkFlagRename(
-    previous, requested, parseStatusText(statusInput.value), parseParamsText(paramsInput.value), paletteInput.value,
-    label => BASE_STATUS_LABELS.includes(label) || label === "initiative" || isKnownConsumableLabel(label),
-  );
-  // Validation is complete before any field changes. Keep row formatting and current values.
-  statusInput.value = replaceStatusLabel(statusInput.value, previous, name);
-  paramsInput.value = replaceFlagReferences(paramsInput.value, previous, name);
-  paletteInput.value = replaceFlagReferences(paletteInput.value, previous, name);
-  return name;
+  const s = area("statusEdit"), p = area("paramsEdit"), palette = area("palette");
+  const name = checkFlagRename(previous, requested, parseStatusText(s.value), parseParamsText(p.value), palette.value, label => BASE_STATUS_LABELS.includes(label) || label === "initiative" || isKnownConsumableLabel(label));
+  s.value = replaceStatusLabel(s.value, previous, name); p.value = replaceFlagReferences(p.value, previous, name); palette.value = replaceFlagReferences(palette.value, previous, name); return name;
 }
-
-function refreshVariableHelpers(): void {
-  latestVars = buildVariableText(
-    parseStatusText((document.getElementById("statusEdit") as HTMLTextAreaElement).value),
-    parseParamsText((document.getElementById("paramsEdit") as HTMLTextAreaElement).value), latestSkillNames,
-  );
-  (document.getElementById("vars") as HTMLTextAreaElement).value = latestVars;
-}
-
-type NamedValue = { label?: unknown; value?: unknown; max?: unknown };
-type CcfoliaCharacterJson = { data?: { commands?: string; status?: unknown[]; params?: unknown[]; color?: string; [key: string]: unknown }; [key: string]: unknown };
-
-const BASE_STATUS_LABELS = ["HP", "MP", "フェイト", "移動力", "物理防御力", "魔法防御力", "携帯可能重量", "判定BD", "命中BD", "回避BD", "ダメBD", "ダメバフ", "EP", "所持金"];
-const DEFAULT_CONSUMABLE_LABELS = DEFAULT_CONSUMABLES.map((item) => item.label);
-
-function labelOf(item: unknown): string | null {
-  const label = (item as NamedValue)?.label;
-  return typeof label === "string" && label.trim() ? label.trim() : null;
-}
-
-function unique(values: string[]): string[] {
-  return [...new Set(values.filter(Boolean))];
-}
-
-function buildVariableText(status: unknown[], params: unknown[], skillNames: string[] = []): string {
-  const statusLabels = unique(status.map(labelOf).filter((v): v is string => !!v));
-  const paramLabels = unique(params.map(labelOf).filter((v): v is string => !!v));
-  const consumableLabels = statusLabels.filter(isKnownConsumableLabel);
-  const extraStatusFlags = statusLabels.filter((label) => !BASE_STATUS_LABELS.includes(label) && !isKnownConsumableLabel(label));
-  const allSkillFlags = unique([...skillNames, ...extraStatusFlags]);
-  const optionalConsumableLabels = consumableLabels.filter((label) => !DEFAULT_CONSUMABLE_LABELS.includes(label));
-
-  const lines: string[] = [];
-  lines.push("### ■よく使う補正");
-  lines.push("{判定BD}D", "{命中BD}D", "{回避BD}D", "{ダメBD}D", "{ダメバフ}");
-  lines.push("", "### ■ダメージ属性", "{ダメージ属性}");
-  if (allSkillFlags.length) {
-    lines.push("", "### ■スキル・フラグ候補");
-    for (const label of allSkillFlags) lines.push(`{${label}}`, `{${label}}D`, `:${label}=1`, `:${label}=0`);
-  }
-  if (optionalConsumableLabels.length) {
-    lines.push("", "### ■消耗品コマンド");
-    for (const label of optionalConsumableLabels) lines.push(`:${label}-1`);
-  }
-  lines.push("", "### ■基本ステータス");
-  for (const label of statusLabels) lines.push(`{${label}}`);
-  lines.push("", "### ■判定・能力値");
-  for (const label of paramLabels) lines.push(`{${label}}`);
-  lines.push("", "### ■式の部品");
-  lines.push(
-    "({命中ダイス}+{判定BD}+{命中BD})D+{命中}",
-    "({回避ダイス}+{判定BD}+{回避BD})D+{回避}",
-    "({魔術判定ダイス}+{判定BD}+{命中BD})D+{魔術判定}",
-    "({攻撃ダイス}+{ダメBD})D+{攻撃力}+{ダメバフ}",
-    "c(-{物理防御力})",
-    "c(-{魔法防御力})",
-  );
-  return lines.join("\n");
-}
-
-function statusToText(status: unknown[]): string {
-  return status.map((s) => {
-    const item = s as NamedValue;
-    return [item.label ?? "", item.value ?? "0", item.max ?? "0"].join("\t");
-  }).join("\n");
-}
-
-function paramsToText(params: unknown[]): string {
-  return params.map((p) => {
-    const item = p as NamedValue;
-    return [item.label ?? "", item.value ?? "0"].join("\t");
-  }).join("\n");
-}
-
-function splitEditableLine(line: string): string[] {
-  if (line.includes("\t")) return line.split("\t");
-  if (/[=＝,，/]/.test(line)) return line.split(/\s*[=＝,，/]\s*/);
-  return line.split(/\s+/);
-}
-
-function parseStatusText(text: string) {
-  return text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).map((line) => {
-    const parts = splitEditableLine(line);
-    return { label: parts[0]?.trim() ?? "", value: String(parts[1] ?? "0").trim(), max: String(parts[2] ?? "0").trim() };
-  }).filter((s) => s.label);
-}
-
-function parseParamsText(text: string) {
-  return text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).map((line) => {
-    const parts = splitEditableLine(line);
-    return { label: parts[0]?.trim() ?? "", value: String(parts[1] ?? "0").trim() };
-  }).filter((p) => p.label);
-}
-
+function refreshVariableHelpers(): void { latestVars = buildVariableText(parseStatusText(area("statusEdit").value), parseParamsText(area("paramsEdit").value), latestSkillNames); area("vars").value = latestVars; }
 function hslToHex(h: number, s: number, l: number): string {
-  s /= 100;
-  l /= 100;
-  const c = (1 - Math.abs(2 * l - 1)) * s;
-  const x = c * (1 - Math.abs((h / 60) % 2 - 1));
-  const m = l - c / 2;
+  s /= 100; l /= 100; const c = (1 - Math.abs(2 * l - 1)) * s, x = c * (1 - Math.abs((h / 60) % 2 - 1)), m = l - c / 2;
   let r = 0, g = 0, b = 0;
-  if (h < 60) [r, g, b] = [c, x, 0];
-  else if (h < 120) [r, g, b] = [x, c, 0];
-  else if (h < 180) [r, g, b] = [0, c, x];
-  else if (h < 240) [r, g, b] = [0, x, c];
-  else if (h < 300) [r, g, b] = [x, 0, c];
-  else [r, g, b] = [c, 0, x];
-  const toHex = (v: number) => Math.round((v + m) * 255).toString(16).padStart(2, "0");
-  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+  if (h < 60) [r,g,b] = [c,x,0]; else if (h < 120) [r,g,b] = [x,c,0]; else if (h < 180) [r,g,b] = [0,c,x]; else if (h < 240) [r,g,b] = [0,x,c]; else if (h < 300) [r,g,b] = [x,0,c]; else [r,g,b] = [c,0,x];
+  const hex = (v: number) => Math.round((v+m)*255).toString(16).padStart(2,"0"); return `#${hex(r)}${hex(g)}${hex(b)}`;
 }
-
-function safeNum(value: unknown, fallback = 0): number {
-  const n = Number(String(value ?? "").replace(/,/g, ""));
-  return Number.isFinite(n) ? n : fallback;
-}
-
+function safeNum(value: unknown, fallback = 0): number { const n = Number(String(value ?? "").replace(/,/g,"")); return Number.isFinite(n) ? n : fallback; }
 function extractColor(raw: Record<string, unknown>): string | undefined {
-  const colorKeys = Object.keys(raw).filter((key) => /color|colour|palette|chat/i.test(key));
-  for (const key of colorKeys) {
-    const value = String(raw[key] ?? "");
-    const hit = value.match(/#[0-9a-fA-F]{6}/);
-    if (hit) return hit[0];
-  }
-  const h = safeNum(raw.colorHeadBgH, NaN);
-  const s = safeNum(raw.colorHeadBgS, NaN);
-  const l = safeNum(raw.colorHeadBgL, NaN);
-  if (Number.isFinite(h) && Number.isFinite(s) && Number.isFinite(l)) return hslToHex(((h % 360) + 360) % 360, s, l);
-  return undefined;
+  for (const key of Object.keys(raw).filter(key => /color|colour|palette|chat/i.test(key))) { const hit = String(raw[key] ?? "").match(/#[0-9a-fA-F]{6}/); if (hit) return hit[0]; }
+  const h = safeNum(raw.colorHeadBgH,NaN), s = safeNum(raw.colorHeadBgS,NaN), l = safeNum(raw.colorHeadBgL,NaN);
+  if (Number.isFinite(h) && Number.isFinite(s) && Number.isFinite(l)) return hslToHex(((h%360)+360)%360,s,l); return undefined;
 }
-
 async function loadRawSheet(): Promise<Record<string, unknown>> {
-  const manual = (document.getElementById("json") as HTMLTextAreaElement).value.trim();
-  if (manual) return JSON.parse(manual) as Record<string, unknown>;
-  const url = (document.getElementById("url") as HTMLInputElement).value.trim();
-  if (!url) throw new Error("ゆとシートURLを入力してください。");
-  return await fetchYtsheetJson(url) as Record<string, unknown>;
+  const manual = area("json").value.trim(); if (manual) return JSON.parse(manual) as Record<string, unknown>;
+  const url = (document.getElementById("url") as HTMLInputElement).value.trim(); if (!url) throw new Error("ゆとシートURLを入力してください。"); return await fetchYtsheetJson(url) as Record<string, unknown>;
 }
-
 function refreshOutputJsonFromEditedFields(): string {
-  const warn = document.getElementById("warn") as HTMLElement;
-  const out = (document.getElementById("outjson") as HTMLTextAreaElement).value.trim() || latest;
-  const palette = (document.getElementById("palette") as HTMLTextAreaElement).value;
-  if (!out) throw new Error("先に出力してください。");
-
+  const out = area("outjson").value.trim() || latest; if (!out) throw new Error("先に出力してください。");
   const parsed = JSON.parse(out) as CcfoliaCharacterJson;
   if (!parsed.data || typeof parsed.data !== "object") throw new Error("ココフォリアJSONの data が見つかりません。");
-
-  parsed.data.commands = buildCommands(palette);
-  parsed.data.status = parseStatusText((document.getElementById("statusEdit") as HTMLTextAreaElement).value);
-  parsed.data.params = parseParamsText((document.getElementById("paramsEdit") as HTMLTextAreaElement).value);
-  latest = JSON.stringify(parsed, null, 2);
-  latestVars = buildVariableText(parsed.data.status, parsed.data.params, latestSkillNames);
-  (document.getElementById("outjson") as HTMLTextAreaElement).value = latest;
-  (document.getElementById("vars") as HTMLTextAreaElement).value = latestVars;
-  warn.textContent = "編集内容をココフォリアJSONに反映しました。";
-  return latest;
+  parsed.data.commands = buildCommands(area("palette").value); parsed.data.status = parseStatusText(area("statusEdit").value); parsed.data.params = parseParamsText(area("paramsEdit").value);
+  latest = JSON.stringify(parsed,null,2); area("outjson").value = latest; refreshVariableHelpers(); document.getElementById("warn")!.textContent = "編集内容をココフォリアJSONに反映しました。"; return latest;
 }
 
-(document.getElementById("gen") as HTMLButtonElement).onclick = async () => {
-  const warn = document.getElementById("warn") as HTMLElement;
-  if (latest && editableSnapshot() !== outputSnapshot && !window.confirm("再出力すると、手で編集した内容と補正の選択をリセットします。再出力しますか？")) return;
-  const generateButton = document.getElementById("gen") as HTMLButtonElement;
-  generateButton.disabled = true;
-  warn.textContent = "出力中...";
-  try {
-    const raw = await loadRawSheet();
-    const urlInput = (document.getElementById("url") as HTMLInputElement).value.trim();
-    const url = urlInput || String(raw.sheetURL ?? "");
-    const sheet = parseYtsheet(raw, url);
-    latestSkillNames = unique(sheet.skills.map((skill) => skill.name));
-    const custom = {};
-    const generated = buildPalette(sheet, custom);
-    const prepared = prepareCalculationPalette(sheet, generated.text);
-    const text = prepared.text;
-    const warnings = [...generated.warnings];
-    if (prepared.reviews.length) warnings.push(`自動で式にできない効果が${prepared.reviews.length}件あります。「式に加える補正」の要確認欄を確認してください。`);
-    const status = buildStatus(sheet, custom);
-    const useYtsheetStyleParams = (document.getElementById("useYtsheetStyleParams") as HTMLInputElement).checked;
-    const params = buildParams(sheet, useYtsheetStyleParams);
-    const memo = buildMemo(raw);
-    const color = extractColor(raw);
-    const cc = buildCharacterJson(sheet.name, url, status, params, buildCommands(text), sheet.initiative, memo, color);
-    latest = JSON.stringify(cc, null, 2);
-    latestVars = buildVariableText(status, params, latestSkillNames);
-    (document.getElementById("outjson") as HTMLTextAreaElement).value = latest;
-    (document.getElementById("statusEdit") as HTMLTextAreaElement).value = statusToText(status);
-    (document.getElementById("paramsEdit") as HTMLTextAreaElement).value = paramsToText(params);
-    (document.getElementById("vars") as HTMLTextAreaElement).value = latestVars;
-    (document.getElementById("palette") as HTMLTextAreaElement).value = text;
+export const sessionBridge = {
+  capture(): Snapshot {
+    if (!activeSource || !latest) throw new Error("先にキャラシを出力してください。");
+    const calculation = disposeCalculationEditor?.getState() ?? emptyCalculationState();
+    const base = generateSessionBase(activeSource.raw, activeSource.url, activeSource.useFormula, calculation);
+    base.fields.metadata = activeSource.metadata;
+    const working: Fields = { statusEdit: area("statusEdit").value, paramsEdit: area("paramsEdit").value, palette: area("palette").value, metadata: metadataOnly(area("outjson").value || latest) };
+    return { key: base.key, name: base.sheet.name, raw: structuredClone(activeSource.raw), url: activeSource.url, useFormula: activeSource.useFormula,
+      savedAt: new Date().toISOString(), calculation: structuredClone(calculation), base: base.fields, working };
+  },
+  restore(snapshot: Snapshot): void {
+    // Prepare everything before changing the editor. Loading alone never refills resources.
+    const base = generateSessionBase(snapshot.raw, snapshot.url, snapshot.useFormula, snapshot.calculation);
+    const json = characterJson(snapshot.working);
     disposeCalculationEditor?.();
-    disposeCalculationEditor = mountCalculationEditor(
-      document.getElementById("calculationEditor")!, prepared,
-      document.getElementById("palette") as HTMLTextAreaElement,
-      { ensureFlag: ensureCorrectionFlag, renameFlag: renameCorrectionFlag, changed: refreshVariableHelpers },
-    );
+    activeSource = { raw: structuredClone(snapshot.raw), url: snapshot.url, useFormula: snapshot.useFormula, metadata: snapshot.base.metadata };
+    latest = json; latestSkillNames = unique(base.sheet.skills.map(s => s.name));
+    (document.getElementById("url") as HTMLInputElement).value = snapshot.url; area("json").value = "";
+    (document.getElementById("useYtsheetStyleParams") as HTMLInputElement).checked = snapshot.useFormula;
+    area("statusEdit").value = snapshot.working.statusEdit; area("paramsEdit").value = snapshot.working.paramsEdit; area("palette").value = snapshot.working.palette; area("outjson").value = json;
+    refreshVariableHelpers();
+    disposeCalculationEditor = mountCalculationEditor(document.getElementById("calculationEditor")!, base.prepared, area("palette"), { ensureFlag: ensureCorrectionFlag, renameFlag: renameCorrectionFlag, changed: refreshVariableHelpers }, snapshot.calculation);
     outputSnapshot = editableSnapshot();
-    warn.textContent = warnings.join("\n") || "OK";
-  } catch (e) {
-    warn.textContent = `出力失敗: ${String(e)}`;
-  } finally {
-    generateButton.disabled = false;
-  }
+    document.getElementById("warn")!.textContent = base.warnings.join("\n") || "保存内容を復元しました。";
+  },
 };
-
-(document.getElementById("copy") as HTMLButtonElement).onclick = async () => {
+(document.getElementById("gen") as HTMLButtonElement).onclick = async () => {
+  const warn = document.getElementById("warn")!;
+  if (latest && editableSnapshot() !== outputSnapshot && !window.confirm("再出力すると、手で編集した内容と補正の選択をリセットします。再出力しますか？")) return;
+  const button = document.getElementById("gen") as HTMLButtonElement; button.disabled = true; warn.textContent = "出力中...";
   try {
-    const text = refreshOutputJsonFromEditedFields();
-    await navigator.clipboard.writeText(text);
-  } catch (e) {
-    (document.getElementById("warn") as HTMLElement).textContent = `コピー失敗: ${String(e)}`;
-  }
+    const raw = await loadRawSheet(), url = (document.getElementById("url") as HTMLInputElement).value.trim() || String(raw.sheetURL ?? "");
+    const sheet = parseYtsheet(raw,url), generated = buildPalette(sheet,{}), prepared = prepareCalculationPalette(sheet,generated.text);
+    const status = buildStatus(sheet,{}), useFormula = (document.getElementById("useYtsheetStyleParams") as HTMLInputElement).checked, params = buildParams(sheet,useFormula);
+    const cc = buildCharacterJson(sheet.name,url,status,params,buildCommands(prepared.text),sheet.initiative,buildMemo(raw),extractColor(raw));
+    disposeCalculationEditor?.(); latest = JSON.stringify(cc,null,2); latestSkillNames = unique(sheet.skills.map(s => s.name));
+    activeSource = { raw, url, useFormula, metadata: metadataOnly(latest) };
+    area("outjson").value = latest; area("statusEdit").value = statusToText(status); area("paramsEdit").value = paramsToText(params); area("palette").value = prepared.text; refreshVariableHelpers();
+    disposeCalculationEditor = mountCalculationEditor(document.getElementById("calculationEditor")!,prepared,area("palette"),{ ensureFlag: ensureCorrectionFlag, renameFlag: renameCorrectionFlag, changed: refreshVariableHelpers });
+    outputSnapshot = editableSnapshot();
+    const warnings = [...generated.warnings]; if (prepared.reviews.length) warnings.push(`自動で式にできない効果が${prepared.reviews.length}件あります。「式に加える補正」の要確認欄を確認してください。`);
+    warn.textContent = warnings.join("\n") || "OK"; document.dispatchEvent(new Event("ytsheet:generated"));
+  } catch (error) { warn.textContent = `出力失敗: ${String(error)}`; } finally { button.disabled = false; }
 };
-
-(document.getElementById("copyVars") as HTMLButtonElement).onclick = async () => {
-  latestVars = buildVariableText(
-    parseStatusText((document.getElementById("statusEdit") as HTMLTextAreaElement).value),
-    parseParamsText((document.getElementById("paramsEdit") as HTMLTextAreaElement).value),
-    latestSkillNames,
-  );
-  (document.getElementById("vars") as HTMLTextAreaElement).value = latestVars;
-  await navigator.clipboard.writeText(latestVars);
+(document.getElementById("copy") as HTMLButtonElement).onclick = async () => {
+  try { await navigator.clipboard.writeText(refreshOutputJsonFromEditedFields()); } catch(error) { document.getElementById("warn")!.textContent = `コピー失敗: ${String(error)}`; }
 };
+(document.getElementById("copyVars") as HTMLButtonElement).onclick = async () => { refreshVariableHelpers(); await navigator.clipboard.writeText(latestVars); };

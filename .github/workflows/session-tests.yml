@@ -1,0 +1,25 @@
+name: Test saved sessions
+on:
+  push:
+    branches: ["main", "feature/session-save-update"]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - name: Existing calculation regressions
+        run: node tests/calculation.test.cjs
+      - name: Existing flag naming regressions
+        run: node tests/flagNames.test.cjs
+      - name: Existing editor validation regressions
+        run: node tests/editorValidation.test.cjs
+      - name: Saved sessions and level-up merge
+        run: node tests/session-core.test.cjs
+      - run: npm run build
