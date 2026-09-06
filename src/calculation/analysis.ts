@@ -126,7 +126,8 @@ export function analyzeModifiers(sheet: ParsedSheet): Analysis {
         const active = !/パッシブ|装備/.test(source.timing) && !source.ownAttack;
         const conditional = active || /時|場合|いる間|効果中|クリティカル|場所|受けている|終了まで|暗闇|狂戦士化/.test(full) || /装備|使用/.test(source.usage);
         const limited = /(?:シーン|シナリオ|ラウンド).{0,12}回/.test(source.usage);
-        const flag = limited || /^(?:HP|MP|CL|フェイト|攻撃力|移動力)$/.test(source.name) || source.timing === "装備" ? `${source.name}_補正` : source.name;
+        // Equipment can use its own name; ensureCorrectionFlag handles existing-name collisions.
+        const flag = limited || /^(?:HP|MP|CL|フェイト|攻撃力|移動力)$/.test(source.name) ? `${source.name}_補正` : source.name;
         modifiers.push({ id: `${source.id}-${modifiers.length}`, source: source.name,
           level: source.timing === "装備" ? undefined : source.level,
           effect: `${source.effect}${source.usage && source.usage !== "―" ? ` 使用条件：${source.usage}` : ""}`,
