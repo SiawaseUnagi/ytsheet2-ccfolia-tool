@@ -4,7 +4,8 @@ import { skillToLines } from "./buildSkillCommands";
 
 function sec() {
   return new Map<string, string[]>([
-    ["リソース操作", [":HP+", ":HP-", ":MP+", ":MP-", ":フェイト-", "", "2D　ドロップ品（）", "", "{回避ダイス}D+{回避}+{判定BD}D+{回避BD}D>=0 回避判定", "c(-{物理防御力}) 物理ダメージ計算", "c(-{魔法防御力}) 魔法ダメージ計算"]],
+    ["リソース操作", [":HP+", ":HP-", ":MP+", ":MP-", ":フェイト-", ":initiative=", "", "2D　ドロップ品（）", "", "({回避ダイス}+{判定BD}+{回避BD})D+{回避}>=0 回避判定", "c(-{物理防御力}) 物理ダメージ計算", "c(-{魔法防御力}) 魔法ダメージ計算"]],
+    ["プリプレイ", []],
     ["戦闘前", []],
     ["セットアップ", []],
     ["イニシアチブ", []],
@@ -21,12 +22,11 @@ function sec() {
     ["クリンナップ", []],
     ["戦闘不能", []],
     ["効果参照", []],
-    ["アイテム", []],
-    ["装備効果", []],
-    ["シーン終了時リセット", []],
-    ["シナリオ開始時リセット", []],
     ["判定", []],
     ["パッシブ", []],
+    ["アイテム効果", []],
+    ["シーン終了時リセット", []],
+    ["シナリオ終了時リセット", []],
   ]);
 }
 
@@ -47,7 +47,6 @@ function mapTiming(t: string): string {
   if (/リアクション/.test(t)) return "リアクション";
   if (/クリンナップ/.test(t)) return "クリンナップ";
   if (/戦闘不能/.test(t)) return "戦闘不能";
-  if (/アイテム/.test(t)) return "アイテム";
   if (/効果参照/.test(t)) return "効果参照";
   return "効果参照";
 }
@@ -62,6 +61,20 @@ function looksLikeUnreadLimitedUse(usage: string): boolean {
 
 function cleanHtml(text: unknown): string {
   return String(text ?? "").replace(/&lt;br&gt;/g, " ").replace(/<br\s*\/?>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function isPreplaySkill(skill: YtSkill): boolean {
+  return /アイテム/.test(skill.timing) || /^プリプレイで/.test(cleanHtml(skill.effect));
+}
+
+function preplayDeclarationLine(skills: YtSkill[]): string | null {
+  if (skills.length === 0) return null;
+  const parts = ["プリプレイ"];
+  for (const skill of skills) {
+    const effect = cleanHtml(skill.effect);
+    parts.push(`《${skill.name}》：${effect || "効果参照"}`);
+  }
+  return parts.join("\\n");
 }
 
 function collectEquipmentNotes(sheet: ParsedSheet): string[] {
@@ -86,8 +99,8 @@ function collectEquipmentNotes(sheet: ParsedSheet): string[] {
 function weaponAttackLines(): string[] {
   return [
     "メジャーアクションで武器攻撃を行う。",
-    "{命中ダイス}D+{命中}+{判定BD}D+{命中BD}D>=0 命中判定",
-    "{攻撃ダイス}D+{攻撃力}+{ダメBD}D+{ダメバフ} 物理ダメージ",
+    "({命中ダイス}+{判定BD}+{命中BD})D+{命中}>=0 命中判定",
+    "({攻撃ダイス}+{ダメBD})D+{攻撃力}+{ダメバフ} 物理ダメージ",
   ];
 }
 
@@ -113,7 +126,7 @@ type SkillOutput = {
 };
 
 function pushResets(map: Map<string, string[]>, resets: SkillOutput["resets"]) {
-  for (const r of resets) map.get(r.scope === "scene" ? "シーン終了時リセット" : "シナリオ開始時リセット")?.push(r.line);
+  for (const r of resets) map.get(r.scope === "scene" ? "シーン終了時リセット" : "シナリオ終了時リセット")?.push(r.line);
 }
 
 export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): { text: string; warnings: string[] } {
@@ -122,10 +135,16 @@ export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): { te
   s.get("マイナー")?.push(...defaultConsumableLines());
   s.get("メジャー")?.push(...weaponAttackLines());
 
+  const preplaySkills: YtSkill[] = [];
   const dependent = new Map<string, SkillOutput[]>();
   const independent: SkillOutput[] = [];
 
   for (const sk of sheet.skills) {
+    if (isPreplaySkill(sk)) {
+      preplaySkills.push(sk);
+      continue;
+    }
+
     const refName = referencedSkillName(sk.timing);
     const target = refName ? "効果参照" : mapTiming(sk.timing);
     const out = skillToLines(sk, custom);
@@ -139,6 +158,9 @@ export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): { te
     }
     if (!out.usageLimit && looksLikeUnreadLimitedUse(sk.usage)) warnings.push(`《${sk.name}》：使用制限を読み取れませんでした。`);
   }
+
+  const preplay = preplayDeclarationLine(preplaySkills);
+  if (preplay) s.get("プリプレイ")?.push(preplay);
 
   for (const item of independent) {
     pushSkillLines(s, item.target, item.lines);
@@ -158,28 +180,28 @@ export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): { te
     }
   }
 
-  s.get("装備効果")?.push(...collectEquipmentNotes(sheet));
+  s.get("アイテム効果")?.push(...collectEquipmentNotes(sheet));
   s.get("判定")?.push(
-    "{筋力判定ダイス}D+{筋力判定}+{判定BD}D>=0 【筋力】判定",
-    "{器用判定ダイス}D+{器用判定}+{判定BD}D>=0 【器用】判定",
-    "{敏捷判定ダイス}D+{敏捷判定}+{判定BD}D>=0 【敏捷】判定",
-    "{知力判定ダイス}D+{知力判定}+{判定BD}D>=0 【知力】判定",
-    "{感知判定ダイス}D+{感知判定}+{判定BD}D>=0 【感知】判定",
-    "{精神判定ダイス}D+{精神判定}+{判定BD}D>=0 【精神】判定",
-    "{幸運判定ダイス}D+{幸運判定}+{判定BD}D>=0 【幸運】判定",
-    "{命中ダイス}D+{命中}+{判定BD}D+{命中BD}D>=0 命中判定",
-    "{回避ダイス}D+{回避}+{判定BD}D+{回避BD}D>=0 回避判定",
-    "{トラップ探知ダイス}D+{トラップ探知}+{判定BD}D>=0 トラップ探知判定",
-    "{トラップ解除ダイス}D+{トラップ解除}+{判定BD}D>=0 トラップ解除判定",
-    "{危険感知ダイス}D+{危険感知}+{判定BD}D>=0 危険感知判定",
-    "{エネミー識別ダイス}D+{エネミー識別}+{判定BD}D>=0 エネミー識別判定",
-    "{アイテム鑑定ダイス}D+{アイテム鑑定}+{判定BD}D>=0 アイテム鑑定判定",
-    "{魔術判定ダイス}D+{魔術判定}+{判定BD}D+{命中BD}D>=0 魔術判定",
-    "{呪歌判定ダイス}D+{呪歌判定}+{判定BD}D>=0 呪歌判定",
-    "{錬金術判定ダイス}D+{錬金術判定}+{判定BD}D>=0 錬金術判定",
+    "({筋力判定ダイス}+{判定BD})D+{筋力判定}>=0 【筋力】判定",
+    "({器用判定ダイス}+{判定BD})D+{器用判定}>=0 【器用】判定",
+    "({敏捷判定ダイス}+{判定BD})D+{敏捷判定}>=0 【敏捷】判定",
+    "({知力判定ダイス}+{判定BD})D+{知力判定}>=0 【知力】判定",
+    "({感知判定ダイス}+{判定BD})D+{感知判定}>=0 【感知】判定",
+    "({精神判定ダイス}+{判定BD})D+{精神判定}>=0 【精神】判定",
+    "({幸運判定ダイス}+{判定BD})D+{幸運判定}>=0 【幸運】判定",
+    "({命中ダイス}+{判定BD}+{命中BD})D+{命中}>=0 命中判定",
+    "({回避ダイス}+{判定BD}+{回避BD})D+{回避}>=0 回避判定",
+    "({トラップ探知ダイス}+{判定BD})D+{トラップ探知}>=0 トラップ探知判定",
+    "({トラップ解除ダイス}+{判定BD})D+{トラップ解除}>=0 トラップ解除判定",
+    "({危険感知ダイス}+{判定BD})D+{危険感知}>=0 危険感知判定",
+    "({エネミー識別ダイス}+{判定BD})D+{エネミー識別}>=0 エネミー識別判定",
+    "({アイテム鑑定ダイス}+{判定BD})D+{アイテム鑑定}>=0 アイテム鑑定判定",
+    "({魔術判定ダイス}+{判定BD}+{命中BD})D+{魔術判定}>=0 魔術判定",
+    "({呪歌判定ダイス}+{判定BD})D+{呪歌判定}>=0 呪歌判定",
+    "({錬金術判定ダイス}+{判定BD})D+{錬金術判定}>=0 錬金術判定",
   );
 
-  const order = ["リソース操作", "戦闘前", "セットアップ", "イニシアチブ", "フリー", "ムーブ", "レガシー", "マイナー", "メジャー", "判定の直前", "判定の直後", "DR直前", "DR直後", "リアクション", "クリンナップ", "戦闘不能", "効果参照", "アイテム", "装備効果", "シーン終了時リセット", "シナリオ開始時リセット", "判定", "パッシブ"];
+  const order = ["リソース操作", "プリプレイ", "戦闘前", "セットアップ", "イニシアチブ", "フリー", "ムーブ", "レガシー", "マイナー", "メジャー", "判定の直前", "判定の直後", "DR直前", "DR直後", "リアクション", "クリンナップ", "戦闘不能", "効果参照", "判定", "パッシブ", "アイテム効果", "シーン終了時リセット", "シナリオ終了時リセット"];
   const text = order.map((k) => `### ■${k}\n${(s.get(k) ?? []).join("\n")}`.trimEnd()).join("\n\n");
   return { text, warnings };
 }
