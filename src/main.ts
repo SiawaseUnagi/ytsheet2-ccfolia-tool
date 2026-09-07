@@ -14,6 +14,7 @@ import { fetchYtsheetJson } from "./ytsheet/fetchYtsheet";
 import { parseYtsheet } from "./ytsheet/parseYtsheet";
 import { characterJson, generateSessionBase, metadataOnly } from "./session/generation";
 import { type Fields, type Snapshot } from "./session/model";
+import { switchParameterMode } from "./editor/parameterMode";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 app.innerHTML = `<main style="max-width:1000px;margin:auto;padding:16px;font-family:sans-serif">
@@ -37,62 +38,19 @@ app.innerHTML = `<main style="max-width:1000px;margin:auto;padding:16px;font-fam
 <h3>パラメータ（ラベル / 値）</h3><textarea id='paramsEdit' rows='12' style='width:100%;box-sizing:border-box'></textarea>
 <h3>チャットパレット編集用：変数一覧</h3><textarea id='vars' rows='12' style='width:100%;box-sizing:border-box'></textarea>
 <section id='calculationEditor' style='margin:16px 0;line-height:1.7' aria-label='判定・ダメージ・回復量の補正'></section>
-<h3>チャットパレット（ここを編集してからコピーすると反映）</h3><textarea id='palette' rows='20' style='width:100%;box-sizing:border-box'></textarea>
-<section id='usageInstructions' style='margin-top:24px;padding:16px;border:1px solid #ddd;border-radius:8px;background:#fafafa;line-height:1.7'>
-  <h2 style='margin-top:0'>使い方</h2>
-  <ol>
-    <li>ゆとシートⅡのURLを入力して、<strong>出力</strong>を押します。</li>
-    <li>必要に応じて、ステータス・パラメータ・チャットパレット欄を編集します。</li>
-    <li><strong>ココフォリアJSONをコピー</strong>を押すと、編集内容を反映したJSONがコピーされます。</li>
-    <li>ココフォリアの盤面で右クリックし、<strong>クリップボードから貼り付け</strong>でキャラクターコマを作成します。</li>
-  </ol>
-  <h3>プリプレイ宣言</h3>
-  <p>タイミングが「アイテム」のスキルと、効果文が「プリプレイで」から始まるスキルは、チャットパレットのプリプレイ欄にまとめて出力します。1行の中に改行用の <code>\\n</code> を入れているので、その行を押すだけで複数の宣言をまとめて発言できます。</p>
-  <h3>パラメータ出力</h3>
-  <p>「ゆとシートのデフォルト変数を使用する」にチェックが入っていると、<code>命中 {器用判定}-1</code> のような参照式で出力します。チェックを外すと、同じ変数名のまま <code>命中 5</code> のように数値を直接入れて出力します。</p>
-  <h3>編集欄について</h3>
-  <p>ステータス欄は「ラベル 現在値 最大値」、パラメータ欄は「ラベル 値」の形で編集できます。区切りはタブ、半角スペース、カンマ、スラッシュ、= が使えます。</p>
-  <pre style='white-space:pre-wrap;background:#fff;padding:8px;border-radius:6px'>HPP 2 0
-スマッシュ 0 0
-CL 3</pre>
-  <p>行を消すとその項目は削除され、行を追加すると項目を追加できます。並び替えたい場合は、行の順番を入れ替えてください。</p>
-  <h3>ダメージ属性</h3>
-  <p>武器攻撃のダメージ式は <code>{ダメージ属性}ダメージ</code> と表示します。初期値は「物理」で、マイナー欄に <code>//ダメージ属性=物理</code> を出力します。理力符などで属性を変える場合は、チャットパレット編集欄でこの行を、たとえば <code>//ダメージ属性=〈地〉属性魔法</code> に書き換えてください。物理ダメージに戻すときは、同じ行を <code>//ダメージ属性=物理</code> に戻します。</p>
-  <p>この設定は表示用です。理力符の使用宣言を送るだけで属性が切り替わったり、消費したりする処理は追加していません。ダメージの数値や適用する防御力は別に確認してください。</p>
-  <h3>判定・ダメージ・回復量の補正</h3>
-  <p>読み取れた魔法攻撃のダメージやHP・MPの回復量は、スキルの判定式の下に出力します。プロテクション・ディスコードのように効果をダイスで求めるスキルやレイズは、<code>5D プロテクション</code>、<code>2D レイズ</code> のようにスキル名を付けたロールを出します。ダイス数は各スキルの効果文とレベルから求め、読めない式は推測しません。「式に加える補正」で対象の式を開き、加えたい効果にチェックを入れてください。スキルレベルは計算し、CLや能力値は変数のまま残します。</p>
-  <p>新規出力時は、判定・回復量・スキルの効果の補正は未選択、ダメージの補正は選択済みです。保存から再開した場合は保存した選択を優先します。ゆとシートの合計値に反映済みの効果を選ぶと二重に加算されるため、元の効果文と適用対象を確認してください。攻撃用・HP回復用・MP回復用の補正は分けて扱います。「HPを○点にする」式には通常の回復量増加を加えません。</p>
-  <p>補正のチェックは、式に組み込む操作です。条件付きの効果で「0・1で切り替え」を選ぶと、必要なステータスを現在値0・最大値0で追加します。卓中は対応するステータスを1にすると有効、0にすると無効になります。未対応の条件や効果の書き換えは手動で調整してください。</p>
-  <p>同じ内容の共通判定が複数の見出しにある場合、補正欄では一つにまとめ、チェックを変えると該当する行へまとめて反映します。スキルごとの判定や、元の式・適用対象が異なるものは別に扱います。以前の保存で共通判定の選択が異なる場合は勝手に統一せず、混在表示にします。チェックや加算方法を変更した補正から統一されます。</p>
-  <p>未登録の名前を変数一覧から使う場合は、ステータス欄にも追加してください。</p>
-  <p>チェックの変更は対象の式だけに反映します。その式を手で編集した後は自動で上書きせず、候補式を表示します。編集を最初からやり直す「出力」は、変更内容を破棄するか確認してから再生成します。編集を残してキャラシを更新するときは「更新を反映」を使ってください。</p>
-  <p>補正用の名前を短くしたいときは、「0・1で切り替え」の下にある「変数名を変更」を開き、WBなどを入力して「名前を適用」を押します。同じ補正を使う式、ステータス、変数一覧に反映し、使用回数の名前は変えません。手で編集した式は数式を作り直さず、変数名だけを置き換えます。空欄で適用すると元の名前に戻ります。</p>
-  <p>単一の能力値は <code>{スマッシュ}*{筋力}</code> のように出力します。合計を掛ける式では <code>{補正}*({筋力}+3)</code> のように括弧を残します。能力値のパラメータを数値ではなく複合式に手で変える場合は、参照した式の計算順も確認してください。</p>
-  <p>追加した切り替え用ステータスはチェックを外しても残ります。不要なものはステータス欄で削除できます。「元の効果文・条件を確認する」から原文を参照してください。</p>
-  <h3>消耗品の自動出力</h3>
-  <p>次の表形式でアイテム欄を記入した場合のみ、消耗品の名前・個数・使用タイミング・効果のロールをまとめてステータスとチャットパレットへ反映します。列の順番は「名前｜個数｜効果｜説明｜重量」です。効果の先頭に使用タイミングを書き、効果欄に「消耗品」を含めてください。名前は略さず、記入した名前を使います。</p>
-  <pre style='white-space:pre-wrap;overflow-wrap:anywhere'>|ハイHPポーション|3|マイナーアクション、メジャーアクション。HP回復を行なう。使用者の【HP】を［4D］点回復する。消耗品。|効果の高いHPポーション。|@[1*3]|</pre>
-  <p>この例では「ハイHPポーション 3 0」と、マイナー・メジャーそれぞれに使用宣言、消費コマンド、4Dのロールを出します。└・┗などの行頭の罫線と重量の記載は個数に数えません。同じ名前・効果の行は個数を合計します。個数0は0のまま扱います。使用タイミングや個数を読めない行は自動出力せず、回復量だけ読めない場合は宣言と消費コマンドを出してロールを要確認にします。</p>
-  <p>従来のHPP*3などの簡易表記は個数の読み取りだけ残しています。表形式で読み取れたアイテムと重複する手入力用ひな形は省き、それ以外のHPP・MPP・HHPP・HMPP・毒消しのひな形は従来どおり残します。自動で読めなかったものは手で追加してください。</p>
-  <h3>全判定・精神リアクションと装備の補正</h3>
-  <p>「あらゆる判定」の補正は全種類の判定に選択できますが、ダメージや回復量には加えません。精神判定には強心丹Dを加え、強心丹の使用後は1、終了後は0にします。所持数の「強心丹」と補正用の「強心丹D」は別々です。</p>
-  <p>リソース操作に精神判定（リアクション）を出します。《ベアアップ》（ペアアップ表記も対応）を取得している場合だけ、この式に+1Dします。通常の精神判定は増やさず、補正候補にも重ねて出しません。この+1Dの式はスキルに対するリアクション用です。</p>
-  <p>装備の加算方法は、効果文にパッシブとあれば常時加算、DRの直前・直後や効果参照などの使用タイミングがあれば0・1で切り替えが初期値です。条件付きのパッシブは適用条件を確認し、必要なら切り替え方式へ変えてください。攻撃スキル自身のダメージ増加はそのスキルの式にだけ加算します。攻撃を可能にする効果や、武器を説明しているだけの記載からはダメージ式を作りません。</p>
-  <h3>注意</h3>
-  <p>このツールは、ゆとシートの内容からココフォリア用のコマを作る補助ツールです。スキル効果の条件付き補正までは完全自動では処理しません。必要な補正は、チャットパレット編集用の変数一覧を見ながら手動で足してください。</p>
-  <p>チャットパレットを編集した後は、必ず<strong>ココフォリアJSONをコピー</strong>を押してください。表示されているJSONにも編集内容が反映されます。</p>
-</section>
+<h3>チャットパレット</h3><textarea id='palette' rows='20' style='width:100%;box-sizing:border-box'></textarea>
+<section id='usageInstructions' style='margin-top:24px;padding:16px;border:1px solid #ddd;border-radius:8px;background:#fafafa;line-height:1.7'></section>
 </main>`;
 
 let latest = "", latestVars = "", latestSkillNames: string[] = [], outputSnapshot = "";
 let disposeCalculationEditor: CalculationEditor | undefined;
-let activeSource: { raw: Record<string, unknown>; url: string; useFormula: boolean; metadata: string } | undefined;
+let activeSource: { raw: Record<string, unknown>; url: string; useFormula: boolean; metadata: string; parameterBase: string } | undefined;
 type NamedValue = { label?: unknown; value?: unknown; max?: unknown };
 type CcfoliaCharacterJson = { data?: { commands?: string; status?: unknown[]; params?: unknown[]; color?: string; [key: string]: unknown }; [key: string]: unknown };
 const BASE_STATUS_LABELS = ["HP", "MP", "フェイト", "移動力", "物理防御力", "魔法防御力", "携帯可能重量", "判定BD", "命中BD", "回避BD", "ダメBD", "ダメバフ", "EP", "所持金", "強心丹D"];
 const DEFAULT_CONSUMABLE_LABELS = DEFAULT_CONSUMABLES.map(item => item.label);
 const area = (id: string) => document.getElementById(id) as HTMLTextAreaElement;
-function editableSnapshot(): string { return JSON.stringify([area("statusEdit").value, area("paramsEdit").value, area("palette").value, area("outjson").value, disposeCalculationEditor?.getState()]); }
+function editableSnapshot(): string { return JSON.stringify([area("statusEdit").value, area("paramsEdit").value, area("palette").value, area("outjson").value, disposeCalculationEditor?.getState(), activeSource?.useFormula]); }
 function labelOf(item: unknown): string | null { const label = (item as NamedValue)?.label; return typeof label === "string" && label.trim() ? label.trim() : null; }
 function unique(values: string[]): string[] { return [...new Set(values.filter(Boolean))]; }
 function isCurrentConsumableLabel(label: string): boolean { return isSheetConsumableLabel(activeSource?.raw ?? {}, label); }
@@ -167,6 +125,7 @@ export const sessionBridge = {
     const calculation = disposeCalculationEditor?.getState() ?? emptyCalculationState();
     const base = generateSessionBase(activeSource.raw, activeSource.url, activeSource.useFormula, calculation);
     base.fields.metadata = activeSource.metadata;
+    base.fields.paramsEdit = activeSource.parameterBase;
     const working: Fields = { statusEdit: area("statusEdit").value, paramsEdit: area("paramsEdit").value, palette: area("palette").value, metadata: metadataOnly(area("outjson").value || latest) };
     return { key: base.key, name: base.sheet.name, raw: structuredClone(activeSource.raw), url: activeSource.url, useFormula: activeSource.useFormula,
       savedAt: new Date().toISOString(), calculation: structuredClone(calculation), base: base.fields, working };
@@ -176,7 +135,7 @@ export const sessionBridge = {
     const base = generateSessionBase(snapshot.raw, snapshot.url, snapshot.useFormula, snapshot.calculation);
     const json = characterJson(snapshot.working);
     disposeCalculationEditor?.();
-    activeSource = { raw: structuredClone(snapshot.raw), url: snapshot.url, useFormula: snapshot.useFormula, metadata: snapshot.base.metadata };
+    activeSource = { raw: structuredClone(snapshot.raw), url: snapshot.url, useFormula: snapshot.useFormula, metadata: snapshot.base.metadata, parameterBase: snapshot.base.paramsEdit };
     latest = json; latestSkillNames = unique(base.sheet.skills.map(s => s.name));
     (document.getElementById("url") as HTMLInputElement).value = snapshot.url; area("json").value = "";
     (document.getElementById("useYtsheetStyleParams") as HTMLInputElement).checked = snapshot.useFormula;
@@ -187,6 +146,31 @@ export const sessionBridge = {
     document.getElementById("warn")!.textContent = base.warnings.join("\n") || "保存内容を復元しました。";
   },
 };
+
+(document.getElementById("useYtsheetStyleParams") as HTMLInputElement).onchange = () => {
+  const option = document.getElementById("useYtsheetStyleParams") as HTMLInputElement;
+  if (!activeSource || option.checked === activeSource.useFormula) return;
+  const previous = activeSource.useFormula, warn = document.getElementById("warn")!;
+  if ((document.getElementById("gen") as HTMLButtonElement).disabled) {
+    option.checked = previous; warn.textContent = "読み込み中です。完了後に変数の設定を切り替えてください。"; return;
+  }
+  try {
+    const sheet = parseYtsheet(activeSource.raw, activeSource.url);
+    const plan = switchParameterMode(area("paramsEdit").value, activeSource.parameterBase, buildParams(sheet, true), buildParams(sheet, false), option.checked);
+    // Validate and serialize before committing any changes to the visible editor.
+    const json = characterJson({ statusEdit: area("statusEdit").value, paramsEdit: plan.text, palette: area("palette").value, metadata: metadataOnly(area("outjson").value || latest) });
+    area("paramsEdit").value = plan.text; area("outjson").value = json; latest = json;
+    activeSource.useFormula = option.checked; activeSource.parameterBase = plan.baseline;
+    refreshVariableHelpers();
+    area("paramsEdit").dispatchEvent(new Event("input", { bubbles: true }));
+    warn.textContent = `パラメータを${option.checked ? "参照式" : "固定値"}に切り替えました。チャットパレットと補正の選択は保持しています。`;
+    if (plan.retained.length) warn.textContent += `\n手編集した項目や数値を確定できない項目は、そのまま残しました：${plan.retained.join("、")}`;
+  } catch (error) {
+    option.checked = previous;
+    warn.textContent = `切り替えを中止しました：${error instanceof Error ? error.message : String(error)}`;
+  }
+};
+
 (document.getElementById("gen") as HTMLButtonElement).onclick = async () => {
   const warn = document.getElementById("warn")!;
   if (latest && editableSnapshot() !== outputSnapshot && !window.confirm("再出力すると、手で編集した内容と補正の選択をリセットします。再出力しますか？")) return;
@@ -197,7 +181,7 @@ export const sessionBridge = {
     const status = buildStatus(sheet,{}), useFormula = (document.getElementById("useYtsheetStyleParams") as HTMLInputElement).checked, params = buildParams(sheet,useFormula);
     const cc = buildCharacterJson(sheet.name,url,status,params,buildCommands(prepared.text),sheet.initiative,buildMemo(raw),extractColor(raw));
     disposeCalculationEditor?.(); latest = JSON.stringify(cc,null,2); latestSkillNames = unique(sheet.skills.map(s => s.name));
-    activeSource = { raw, url, useFormula, metadata: metadataOnly(latest) };
+    activeSource = { raw, url, useFormula, metadata: metadataOnly(latest), parameterBase: paramsToText(params) };
     area("outjson").value = latest; area("statusEdit").value = statusToText(status); area("paramsEdit").value = paramsToText(params); area("palette").value = prepared.text; refreshVariableHelpers();
     const calculation = createDefaultCalculationState(prepared, ensureCorrectionFlag);
     const selectedPrepared = applyCalculationState(prepared, calculation);

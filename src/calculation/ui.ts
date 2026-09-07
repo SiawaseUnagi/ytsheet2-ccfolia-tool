@@ -44,7 +44,7 @@ export function mountCalculationEditor(host: HTMLElement, prepared: PreparedPale
     const targets = prepared.targets.filter(group.matches).filter(t => t.kind !== "check" || prepared.modifiers.some(m => compatible(m, t)));
     if (!targets.length) continue;
     const linkedGroups = groupCalculationTargets(targets, prepared.modifiers);
-    const outer = el("details"); outer.open = group.name !== "ダメージ" && group.name !== "判定"; outer.append(el("summary", `${group.name}（${linkedGroups.length}項目）`));
+    const outer = el("details"); outer.open = false; outer.append(el("summary", `${group.name}（${linkedGroups.length}項目）`));
     for (const linkedGroup of linkedGroups) {
       const linked = linkedGroup.targets, target = linked[0];
       const title = linkedGroup.title + (linked.length > 1 ? `（${linked.length}か所）` : "");
@@ -99,7 +99,7 @@ export function mountCalculationEditor(host: HTMLElement, prepared: PreparedPale
         checkbox.dataset.modifierId = modifier.id; checkbox.setAttribute("aria-label", `${title}：${modifier.source}`);
         label.append(checkbox, el("span", describe(modifier))); box.append(label);
         const modeLabel = el("label", "加算方法："), mode = el("select"); mode.setAttribute("aria-label", `${modifier.source}の加算方法`);
-        for (const [value, caption] of [["constant", "常時加算"], ["toggle", "0・1で切り替え"]]) { const option = el("option", caption); option.value = value; mode.append(option); }
+        for (const [value, caption] of [["constant", "常時加算"], ["toggle", "フラグ管理"]]) { const option = el("option", caption); option.value = value; mode.append(option); }
         const mixedMode = memberStates.some(s => s.toggle !== state.toggle);
         if (mixedMode) { const option = el("option", "保存時の指定が混在"); option.value = "mixed"; mode.append(option); }
         mode.value = mixedMode ? "mixed" : state.toggle ? "toggle" : "constant";

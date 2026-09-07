@@ -1,7 +1,7 @@
 name: Test palette layout and resource declarations
 on:
   push:
-    branches: [main, feature/palette-layout-resource-help]
+    branches: [main, feature/palette-layout-resource-help, feature/live-parameter-mode-help]
   pull_request:
   workflow_dispatch:
 permissions:
@@ -23,3 +23,5 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: Mobile editing, storage, bulk selection and desktop resize
         run: node tests/enhancements.browser.cjs
+      - name: Live parameter mode, preserved edits and save-resume
+        run: node tests/parameter-mode.browser.cjs
