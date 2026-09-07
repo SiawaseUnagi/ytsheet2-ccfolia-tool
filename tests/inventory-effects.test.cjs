@@ -52,7 +52,7 @@ test('damage defaults checked; recovery and checks default unchecked for both so
  const state=createDefaultCalculationState(p,n=>n);
  for(const t of p.targets)assert.equal(selectionsFor(p,t,state).length>0,t.kind==='damage');
  const damage=p.targets.find(t=>t.id==='weapon-damage'),line=renderRoll(damage,selectionsFor(p,damage,state));
- assert.ok(line.includes('{増力薬_補正}*5'));assert.ok(!line.includes('*15'));
+ assert.ok(line.includes('{増力薬_補正}*(5)'),line);assert.ok(!line.includes('*(15)'));
 });
 test('quantity does not multiply modifiers and duplicate rows make one candidate',()=>{
  const input={items:row('┗携帯回復具',flower,'2')+'\n'+row('└携帯回復具',flower,'3')};
@@ -108,6 +108,6 @@ test('save-update retains item correction choices and shortened flag names',()=>
  const base=generateSessionBase(a,url,true,state),old={key:base.key,name:base.sheet.name,raw:a,url,useFormula:true,savedAt:new Date().toISOString(),calculation:state,base:base.fields,working:{...base.fields,palette:base.fields.palette+'\n手編集の宣言。'}};
  const next=planSessionUpdate(old,raw({level:'6',hpTotal:'44',items:row('携帯回復具',flower)+'\n'+row('増力薬',boost,'4')}));
  assert.equal(next.conflicts.length,0);assert.ok(next.next.working.palette.includes('(3+1)D+{CL}*3 HP回復量'));
- assert.ok(next.next.working.palette.includes('{DP}*5'));assert.ok(next.next.working.statusEdit.includes('DP\t0\t0'));assert.ok(next.next.working.statusEdit.includes('増力薬\t4\t0'));
+ assert.ok(next.next.working.palette.includes('{DP}*(5)'));assert.ok(next.next.working.statusEdit.includes('DP\t0\t0'));assert.ok(next.next.working.statusEdit.includes('増力薬\t4\t0'));
  assert.ok(next.next.working.palette.endsWith('手編集の宣言。'));
 });
