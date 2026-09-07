@@ -23,7 +23,7 @@ const count=(text,s)=>text.split(s).length-1;
  assert.equal(count(text,'(3)D+{CL}*3 HP回復量'),2);
  assert.equal(await page.locator('#calculationEditor details').evaluateAll(xs=>xs.every(x=>!x.open)),true);
  const healCard=()=>page.locator('details[data-target-id]').filter({hasText:'《ヒール》 HP回復量'});
- assert.equal(await healCard().count(),1);assert.match(await healCard().locator(':scope > summary').innerText(),/2か所/);
+ assert.equal(await healCard().count(),1);assert.match(await healCard().locator(':scope > summary').textContent(),/2か所/);
  await healCard().locator('..').locator(':scope > summary').click();await healCard().locator(':scope > summary').click();
  await healCard().locator('input[data-modifier-id]').first().check();text=await page.locator('#palette').inputValue();assert.equal(count(text,'(3)D+{CL}*3+6 HP回復量'),2);
  await page.locator('#useYtsheetStyleParams').uncheck();assert.equal(await page.locator('#palette').inputValue(),text);
