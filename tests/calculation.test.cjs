@@ -92,12 +92,13 @@ test('unknown, recipient-side and rewriting effects are not auto-added', () => {
   }
   assert.ok(prepared.reviews.some(r => r.source === '複雑回復'));
 });
-test('default declarations, item commands and section order are preserved', () => {
-  assert.ok(prepared.text.includes('//ダメージ属性=物理'));
-  assert.ok(prepared.text.includes(':フェイト-\n:initiative='));
-  for (const name of ['HPP', 'MPP', 'HHPP', 'HMPP', '毒消し']) assert.ok(prepared.text.includes(`マイナーアクションで${name}を使用。\n:${name}-1`));
+test('resource declarations and section order survive calculation without starter item templates', () => {
+  assert.ok(prepared.text.includes(':フェイト-\n:initiative=\n//ダメージ属性=物理\n//ダメージ属性=〈〉属性魔法'));
+  for (const name of ['HPP', 'MPP', 'HHPP', 'HMPP', '毒消し']) assert.ok(!prepared.text.includes(`マイナーアクションで${name}を使用。\n:${name}-1`));
   assert.deepEqual(prepared.text.match(/^### .*$/gm), generated.text.match(/^### .*$/gm));
   assert.ok(prepared.text.includes('プリプレイ\\n《プリプレイテスト》'));
+  assert.ok(prepared.text.indexOf('### ■判定\n') < prepared.text.indexOf('### ■プリプレイ\n'));
+  assert.ok(prepared.text.indexOf('### ■プリプレイ\n') < prepared.text.indexOf('### ■パッシブ\n'));
 });
 test('all-skills default statuses do not return, and max stays present', () => {
   const status = buildStatus(sheet, {});
