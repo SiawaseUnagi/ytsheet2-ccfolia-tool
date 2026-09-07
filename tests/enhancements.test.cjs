@@ -75,7 +75,7 @@ test('table full item name, quantity, two timings and recovery roll',()=>{
  assert.deepEqual(data.items[0].rolls,['4D ハイHPポーション']);
  assert.deepEqual(buildStatus(s,{}).find(x=>x.label==='ハイHPポーション'),{label:'ハイHPポーション',value:'3',max:'0'});
  for(const timing of ['マイナー','メジャー'])assert.ok(text.includes(`${timing}アクションでハイHPポーションを使用。\n:ハイHPポーション-1\n4D ハイHPポーション`));
- assert.ok(!text.includes('でHHPPを使用。'));assert.ok(text.includes('でHMPPを使用。'));
+ assert.ok(!text.includes('でHHPPを使用。'));assert.ok(!text.includes('でHMPPを使用。'));
  assert.ok(!buildStatus(s,{}).some(x=>x.label==='HHPP'));
 });
 test('tree prefixes, identical rows, zero counts and weight do not inflate inventory',()=>{
@@ -84,7 +84,7 @@ test('tree prefixes, identical rows, zero counts and weight do not inflate inven
 });
 test('flavour mentions never create other inventory entries',()=>{
  const status=buildStatus(sheet({items:row('試験薬','2',undefined,'HPポーション HPP*100 ハイMPポーション*100')}),{});
- assert.equal(status.find(s=>s.label==='HPP').value,'0');assert.equal(status.find(s=>s.label==='HMPP').value,'0');
+ assert.ok(!status.some(s=>s.label==='HPP'));assert.ok(!status.some(s=>s.label==='HMPP'));
 });
 for(const bad of [row('試験薬','不明'),row('試験薬','2','好きな時。HPを4D点回復する。消耗品。'),row('試験薬','2').replace('|@[1*3]|','|'),row('HP','2'),row('{試験薬}','2')]) test('unsupported row remains manual: '+bad.slice(0,24),()=>{
  const parsed=readConsumableTable(raw({items:bad}));assert.equal(parsed.items.length,0);assert.ok(parsed.warnings.length);
@@ -98,9 +98,9 @@ test('unreadable healing amount still allows declaration without invented dice',
  assert.ok(p.text.includes('試験薬を使用。\n:試験薬-1'));assert.ok(p.warnings.length);
  assert.deepEqual(readConsumableTable(s.raw).items[0].rolls,[]);
 });
-test('plain quantity-only notation and default templates remain',()=>{
+test('plain quantity-only notation remains without starter templates',()=>{
  const s=sheet({items:'HPP*3 @[1*0]\nHPP*3 @[1*3]'});assert.equal(buildStatus(s,{}).find(x=>x.label==='HPP').value,'6');
- assert.ok(buildPalette(s,{}).text.includes('マイナーアクションでHPPを使用。\n:HPP-1'));
+ assert.ok(!buildPalette(s,{}).text.includes('マイナーアクションでHPPを使用。\n:HPP-1'));
 });
 for(const name of ['ベアアップ','ペアアップ']) test(name+' only affects dedicated spirit reaction; never appears as a modifier',()=>{
  const s=sheet({skill:[sk(name,'スキルに対するリアクションとして行なう【精神】判定に+1Dする。'),dance]});

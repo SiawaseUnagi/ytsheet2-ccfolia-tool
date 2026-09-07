@@ -1,11 +1,10 @@
-import { DEFAULT_CONSUMABLES } from "../items/consumables";
+import { planSkillPlacement } from "./skillPlacement";
 import type { CustomCommandMap, ParsedSheet, YtSkill } from "../ytsheet/types";
 import { skillToLines } from "./buildSkillCommands";
 
 function sec() {
   return new Map<string, string[]>([
-    ["リソース操作", [":HP+", ":HP-", ":MP+", ":MP-", ":フェイト-", ":initiative=", "", "2D　ドロップ品（）", "", "({回避ダイス}+{判定BD}+{回避BD})D+{回避}>=0 回避判定", "c(-{物理防御力}) 物理ダメージ計算", "c(-{魔法防御力}) 魔法ダメージ計算"]],
-    ["プリプレイ", []],
+    ["リソース操作", [":HP+", ":HP-", ":MP+", ":MP-", ":フェイト-", ":initiative=", "//ダメージ属性=物理", "//ダメージ属性=〈〉属性魔法", "", "2D　ドロップ品（）", "", "({回避ダイス}+{判定BD}+{回避BD})D+{回避}>=0 回避判定", "c(-{物理防御力}) 物理ダメージ計算", "c(-{魔法防御力}) 魔法ダメージ計算"]],
     ["戦闘前", []],
     ["セットアップ", []],
     ["イニシアチブ", []],
@@ -23,6 +22,7 @@ function sec() {
     ["戦闘不能", []],
     ["効果参照", []],
     ["判定", []],
+    ["プリプレイ", []],
     ["パッシブ", []],
     ["アイテム効果", []],
     ["シーン終了時リセット", []],
@@ -47,38 +47,28 @@ function mapTiming(t: string): string {
   if (/リアクション/.test(t)) return "リアクション";
   if (/クリンナップ/.test(t)) return "クリンナップ";
   if (/戦闘不能/.test(t)) return "戦闘不能";
-  if (/効果参照/.test(t)) return "効果参照";
   return "効果参照";
-}
-
-function referencedSkillName(timing: string): string | null {
-  return timing.trim().match(/^《(.+)》$/)?.[1] ?? null;
 }
 
 function looksLikeUnreadLimitedUse(usage: string): boolean {
   return /(シーン|シナリオ)\s*(?:\d+|SL(?:\s*[＋+]\s*\d+)?)\s*回/.test(usage);
 }
-
 function cleanHtml(text: unknown): string {
   return String(text ?? "").replace(/&lt;br&gt;/g, " ").replace(/<br\s*\/?>/g, " ").replace(/\s+/g, " ").trim();
 }
-
 function isPreplaySkill(skill: YtSkill): boolean {
   return /アイテム/.test(skill.timing) || /^プリプレイで/.test(cleanHtml(skill.effect));
 }
-
 function preplayDeclarationLine(skills: YtSkill[]): string | null {
   if (skills.length === 0) return null;
   const parts = ["プリプレイ"];
   for (const skill of skills) {
     const effect = cleanHtml(skill.effect);
-    parts.push(`《${skill.name}》：${effect || "効果参照"}`);
+    parts.push(`《${skill.name}》${skill.level}：${effect || "効果参照"}`);
   }
   return parts.join("\\n");
 }
-
 function collectEquipmentNotes(sheet: ParsedSheet): string[] {
-  const raw = sheet.raw;
   const slots = [
     ["右手", "armamentHandRName", "armamentHandRNote"],
     ["左手", "armamentHandLName", "armamentHandLNote"],
@@ -89,13 +79,11 @@ function collectEquipmentNotes(sheet: ParsedSheet): string[] {
   ];
   const lines: string[] = [];
   for (const [slot, nameKey, noteKey] of slots) {
-    const name = cleanHtml(raw[nameKey]);
-    const note = cleanHtml(raw[noteKey]);
+    const name = cleanHtml(sheet.raw[nameKey]), note = cleanHtml(sheet.raw[noteKey]);
     if (name && note) lines.push(`${slot}：${name}。${note}`);
   }
   return lines;
 }
-
 function weaponAttackLines(): string[] {
   return [
     "メジャーアクションで武器攻撃を行う。",
@@ -103,89 +91,45 @@ function weaponAttackLines(): string[] {
     "({攻撃ダイス}+{ダメBD})D+{攻撃力}+{ダメバフ} {ダメージ属性}ダメージ",
   ];
 }
-
-function defaultConsumableLines(): string[] {
-  return DEFAULT_CONSUMABLES.flatMap((item) => [
-    `マイナーアクションで${item.label}を使用。`,
-    `:${item.label}-1`,
-    "",
-  ]);
-}
-
-function pushSkillLines(map: Map<string, string[]>, target: string, lines: string[]) {
-  if (target === "パッシブ") map.get(target)?.push(...lines);
-  else map.get(target)?.push(...lines, "");
-}
-
 type SkillOutput = {
-  skill: YtSkill;
-  target: string;
-  lines: string[];
-  resets: { scope: "scene" | "scenario"; line: string }[];
-  usageLimit: unknown;
+  skill: YtSkill; target: string; lines: string[];
+  resets: { scope: "scene" | "scenario"; line: string }[]; usageLimit: unknown;
 };
-
 function pushResets(map: Map<string, string[]>, resets: SkillOutput["resets"]) {
   for (const r of resets) map.get(r.scope === "scene" ? "シーン終了時リセット" : "シナリオ終了時リセット")?.push(r.line);
 }
 
 export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): { text: string; warnings: string[] } {
-  const s = sec();
-  const warnings = [...sheet.warnings];
-  s.get("マイナー")?.push(
-    ...defaultConsumableLines(),
-    "マイナーアクションで理力符（）を使用。",
-    "//ダメージ属性=物理",
-    "〈〉属性魔法",
-    "",
-  );
+  const s = sec(), warnings = [...sheet.warnings];
   s.get("メジャー")?.push(...weaponAttackLines(), "");
-
+  const placement = planSkillPlacement(sheet.skills);
+  warnings.push(...placement.warnings);
+  const outputs: SkillOutput[] = sheet.skills.map(skill => {
+    const out = skillToLines(skill, custom);
+    if (!out.usageLimit && looksLikeUnreadLimitedUse(skill.usage)) warnings.push(`《${skill.name}》：使用制限を読み取れませんでした。`);
+    return { skill, target: mapTiming(skill.timing), lines: out.lines, resets: out.resets, usageLimit: out.usageLimit };
+  });
   const preplaySkills: YtSkill[] = [];
-  const dependent = new Map<string, SkillOutput[]>();
-  const independent: SkillOutput[] = [];
-
-  for (const sk of sheet.skills) {
-    if (isPreplaySkill(sk)) {
-      preplaySkills.push(sk);
-      continue;
+  for (const root of placement.roots) {
+    const preplayRoot = isPreplaySkill(outputs[root].skill);
+    const target = preplayRoot ? "プリプレイ" : outputs[root].target;
+    const stack = [root];
+    while (stack.length) {
+      const index = stack.pop()!, item = outputs[index];
+      if (preplayRoot && isPreplaySkill(item.skill)) preplaySkills.push(item.skill);
+      else {
+        const lines = s.get(target)!, passive = /パッシブ/.test(item.skill.timing);
+        // Bound active blocks so result rolls stay attached to their own declarations.
+        if (!passive && lines.length && lines[lines.length - 1] !== "") lines.push("");
+        lines.push(...item.lines);
+        if (!passive || target !== "パッシブ") lines.push("");
+        pushResets(s, item.resets);
+      }
+      stack.push(...[...(placement.children.get(index) ?? [])].reverse());
     }
-
-    const refName = referencedSkillName(sk.timing);
-    const target = refName ? "効果参照" : mapTiming(sk.timing);
-    const out = skillToLines(sk, custom);
-    const item: SkillOutput = { skill: sk, target, lines: out.lines, resets: out.resets, usageLimit: out.usageLimit };
-    if (refName) {
-      const list = dependent.get(refName) ?? [];
-      list.push(item);
-      dependent.set(refName, list);
-    } else {
-      independent.push(item);
-    }
-    if (!out.usageLimit && looksLikeUnreadLimitedUse(sk.usage)) warnings.push(`《${sk.name}》：使用制限を読み取れませんでした。`);
   }
-
   const preplay = preplayDeclarationLine(preplaySkills);
-  if (preplay) s.get("プリプレイ")?.push(preplay);
-
-  for (const item of independent) {
-    pushSkillLines(s, item.target, item.lines);
-    pushResets(s, item.resets);
-    const children = dependent.get(item.skill.name) ?? [];
-    for (const child of children) {
-      pushSkillLines(s, item.target, child.lines);
-      pushResets(s, child.resets);
-    }
-    dependent.delete(item.skill.name);
-  }
-
-  for (const children of dependent.values()) {
-    for (const child of children) {
-      pushSkillLines(s, "効果参照", child.lines);
-      pushResets(s, child.resets);
-    }
-  }
-
+  if (preplay) s.get("プリプレイ")?.unshift(preplay, "");
   s.get("アイテム効果")?.push(...collectEquipmentNotes(sheet));
   s.get("判定")?.push(
     "({筋力判定ダイス}+{判定BD})D+{筋力判定}>=0 【筋力】判定",
@@ -206,8 +150,5 @@ export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): { te
     "({呪歌判定ダイス}+{判定BD})D+{呪歌判定}>=0 呪歌判定",
     "({錬金術判定ダイス}+{判定BD})D+{錬金術判定}>=0 錬金術判定",
   );
-
-  const order = ["リソース操作", "プリプレイ", "戦闘前", "セットアップ", "イニシアチブ", "フリー", "ムーブ", "レガシー", "マイナー", "メジャー", "判定の直前", "判定の直後", "DR直前", "DR直後", "リアクション", "クリンナップ", "戦闘不能", "効果参照", "判定", "パッシブ", "アイテム効果", "シーン終了時リセット", "シナリオ終了時リセット"];
-  const text = order.map((k) => `### ■${k}\n${(s.get(k) ?? []).join("\n")}`.trimEnd()).join("\n\n");
-  return { text, warnings };
+  return { text: [...s].map(([name, lines]) => `### ■${name}\n${lines.join("\n")}`.trimEnd()).join("\n\n"), warnings };
 }

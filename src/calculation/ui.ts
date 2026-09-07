@@ -1,3 +1,4 @@
+import { mountBulkCheckControls, type CheckChoiceControl } from "./bulkChecks";
 import { groupCalculationTargets } from "./groups";
 import { compatible, type Modifier, type RollTarget } from "./analysis";
 import { renderRoll, TrackedPalette, type PreparedPalette, type Selection } from "./palette";
@@ -30,7 +31,9 @@ export function mountCalculationEditor(host: HTMLElement, prepared: PreparedPale
   const snapshots: CalculationState["choices"] = [];
   const defaultToggles = new Map(prepared.modifiers.map(m => [modifierKey(m, prepared.modifiers), m.conditional]));
   const views: { key: string; refresh: (force?: boolean) => void; rebuild: () => void; active: () => boolean }[] = [];
-  host.append(el("h3", "式に加える補正（試用版）"));
+  host.append(el("h3", "式に加える補正"));
+  const checkControls: CheckChoiceControl[] = [];
+  let refreshBulkControls: () => void = () => {};
   const groups: { name: string; matches: (t: RollTarget) => boolean }[] = [
     { name: "回復量", matches: t => ["hpHeal", "mpHeal"].includes(t.kind) },
     { name: "スキルの効果", matches: t => ["hpSet", "effect"].includes(t.kind) },
@@ -41,7 +44,7 @@ export function mountCalculationEditor(host: HTMLElement, prepared: PreparedPale
     const targets = prepared.targets.filter(group.matches).filter(t => t.kind !== "check" || prepared.modifiers.some(m => compatible(m, t)));
     if (!targets.length) continue;
     const linkedGroups = groupCalculationTargets(targets, prepared.modifiers);
-    const outer = el("details"); outer.open = true; outer.append(el("summary", `${group.name}（${linkedGroups.length}項目）`));
+    const outer = el("details"); outer.open = group.name !== "ダメージ" && group.name !== "判定"; outer.append(el("summary", `${group.name}（${linkedGroups.length}項目）`));
     for (const linkedGroup of linkedGroups) {
       const linked = linkedGroup.targets, target = linked[0];
       const title = linkedGroup.title + (linked.length > 1 ? `（${linked.length}か所）` : "");
@@ -76,7 +79,7 @@ export function mountCalculationEditor(host: HTMLElement, prepared: PreparedPale
         message.textContent = protectedCount
           ? `手編集した${protectedCount}行は上書きしていません。必要な部分だけ候補式から反映してください。`
           : "補正を反映しました。";
-        for (const view of views) view.refresh(); hooks.changed();
+        for (const view of views) view.refresh(); refreshBulkControls(); hooks.changed();
       };
       if (!candidates.length) card.append(el("p", "読み取れた補正候補はありません。必要な補正はチャットパレットで追加できます。"));
       for (const modifier of candidates) {
@@ -137,6 +140,13 @@ export function mountCalculationEditor(host: HTMLElement, prepared: PreparedPale
         updateFlagHelp(); box.append(flagHelp, rename);
         if (target.attack === "weapon" && (modifier.attack === "melee" || modifier.attack === "ranged")) box.append(el("p", `${modifier.attack === "melee" ? "白兵" : "射撃"}攻撃専用です。この式を使う武器に適用できるか確認してください。`));
         const source = el("details"); source.append(el("summary", "元の効果文・条件を確認する"), el("p", modifier.effect)); box.append(source);
+        if (target.kind === "check") checkControls.push({
+          modifier, states: memberStates, rebuild,
+          setChecked: checked => {
+            memberStates.forEach(s => { s.checked = checked; });
+            checkbox.checked = checked; checkbox.indeterminate = false; updateFlagHelp();
+          },
+        });
         checkbox.onchange = () => {
           memberStates.forEach(s => { s.checked = checkbox.checked; }); checkbox.indeterminate = false;
           rebuild(); updateFlagHelp();
@@ -156,6 +166,7 @@ export function mountCalculationEditor(host: HTMLElement, prepared: PreparedPale
       };
       card.append(preview, copy, message); outer.append(card);
     }
+    if (group.name === "判定") refreshBulkControls = mountBulkCheckControls(outer, checkControls);
     host.append(outer);
   }
   if (prepared.reviews.length) {

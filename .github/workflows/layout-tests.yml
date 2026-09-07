@@ -1,0 +1,25 @@
+name: Test palette layout and resource declarations
+on:
+  push:
+    branches: [main, feature/palette-layout-resource-help]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - name: Typecheck and all regression tests
+        run: for test in tests/*.test.cjs; do node "$test" || exit 1; done
+      - run: npm run build
+      - name: Install browser test tools
+        run: npm install --no-save --package-lock=false playwright@1.58.2
+      - run: npx playwright install --with-deps chromium
+      - name: Mobile editing, storage, bulk selection and desktop resize
+        run: node tests/enhancements.browser.cjs
