@@ -74,7 +74,7 @@ test('table full item name, quantity, two timings and recovery roll',()=>{
  assert.equal(data.items[0].label,'ハイHPポーション');assert.equal(data.items[0].count,3);
  assert.deepEqual(data.items[0].rolls,['4D ハイHPポーション']);
  assert.deepEqual(buildStatus(s,{}).find(x=>x.label==='ハイHPポーション'),{label:'ハイHPポーション',value:'3',max:'0'});
- for(const timing of ['マイナー','メジャー'])assert.ok(text.includes(`${timing}アクションでハイHPポーションを使用。\n:ハイHPポーション-1\n4D ハイHPポーション`));
+ for(const timing of ['マイナー','メジャー'])assert.ok(text.includes(`${timing}アクションでハイHPポーションを使用。HP回復を行なう。使用者の【HP】を［4D］点回復する。消耗品。\n:ハイHPポーション-1\n4D ハイHPポーション`));
  assert.ok(!text.includes('でHHPPを使用。'));assert.ok(!text.includes('でHMPPを使用。'));
  assert.ok(!buildStatus(s,{}).some(x=>x.label==='HHPP'));
 });
@@ -95,7 +95,7 @@ test('same label with conflicting effects is not guessed',()=>{
 });
 test('unreadable healing amount still allows declaration without invented dice',()=>{
  const s=sheet({items:row('試験薬','2','マイナー。HPを半分回復する。消耗品。')}), p=buildPalette(s,{});
- assert.ok(p.text.includes('試験薬を使用。\n:試験薬-1'));assert.ok(p.warnings.length);
+ assert.ok(p.text.includes('試験薬を使用。HPを半分回復する。消耗品。\n:試験薬-1'));assert.ok(p.warnings.length);
  assert.deepEqual(readConsumableTable(s.raw).items[0].rolls,[]);
 });
 test('plain quantity-only notation remains without starter templates',()=>{

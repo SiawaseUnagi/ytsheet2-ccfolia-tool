@@ -12,9 +12,9 @@ export function buildStatus(sheet: ParsedSheet, custom: CustomCommandMap) {
   const remaining = status.filter(s => !replaced.has(s.label));
   const consumables = items.map(item => ({ label: item.label, value: String(item.count), max: "0" }));
   consumables.push(...remaining.filter(s => isKnownConsumableLabel(s.label)));
-  const result = remaining.filter(s => !isKnownConsumableLabel(s.label));
-  result.splice(result.findIndex(s => s.label === "ダメバフ") + 1, 0, ...consumables);
-  if (!result.some(s => s.label === "強心丹D")) result.push({ label: "強心丹D", value: "0", max: "0" });
+  const spiritFlag = remaining.find(s => s.label === "強心丹D") ?? { label: "強心丹D", value: "0", max: "0" };
+  const result = remaining.filter(s => !isKnownConsumableLabel(s.label) && s.label !== "強心丹D");
+  result.splice(result.findIndex(s => s.label === "ダメバフ") + 1, 0, spiritFlag, ...consumables);
   return result;
 }
 export function spiritReaction(sheet: ParsedSheet): string {
@@ -34,7 +34,10 @@ export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): { te
     let line = rows[i];
     if (line.startsWith("### ■")) {
       section = line.slice(5); result.push(line);
-      if (section === "マイナー" && rows[i + 1] === "マイナーアクション放棄。") result.push(rows[++i]);
+      if (section === "マイナー" && rows[i + 1] === "マイナーアクション放棄。") {
+        result.push(rows[++i], "");
+        while (rows[i + 1] === "") i++;
+      }
       result.push(...(byTiming.get(section) ?? []));
       if (section === "シーン終了時リセット" && parsed.items.some(item => item.label === "強心丹" && /シーン終了まで持続/.test(item.effect))) result.push(":強心丹D=0");
       continue;

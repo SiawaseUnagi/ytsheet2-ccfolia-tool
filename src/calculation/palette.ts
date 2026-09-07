@@ -14,7 +14,6 @@ export function renderRoll(target: RollTarget, selected: Selection[] = []): stri
     dice = addTerm(dice, gatedTerm(modifier.amount.dice, flag));
     fixed = addTerm(fixed, gatedTerm(modifier.amount.fixed, flag));
   }
-  // Effect-only rolls should read "5D プロテクション", not a damage total or HP heading.
   const simpleDice = (target.kind === "hpSet" || target.kind === "effect") && /^\d+$/.test(dice);
   const formula = dice === "0" ? `C(${fixed})` : `${simpleDice ? dice : `(${dice})`}D${fixed === "0" ? "" : (fixed.startsWith("-") ? fixed : `+${fixed}`)}`;
   return `${formula}${target.kind === "check" ? ">=0" : ""} ${target.suffix}`;
@@ -26,12 +25,12 @@ function checkTarget(line: string, id: string, title: string, skillName?: string
   return { id, title, kind: "check", base: { dice: m[1], fixed: m[2] }, suffix: m[3],
     skillName, attack, magic: /魔術/.test(m[3]), judge: m[3] };
 }
-
 function damageBase(base: Amount): Amount {
   return { dice: addTerm(base.dice, "{ダメBD}"), fixed: addTerm(base.fixed, "{ダメバフ}") };
 }
 
-/** Adds only skill-specific result rolls. Existing declarations and resources stay intact. */
+/** Every active occurrence gets its own tracked ranges. Copies share semantic skill
+ * keys and modifier choices, but editing one formula never overwrites that line. */
 export function prepareCalculationPalette(sheet: ParsedSheet, palette: string): PreparedPalette {
   const analysis = analyzeModifiers(sheet);
   const rows: Row[] = palette.split("\n").map(text => ({ text }));
@@ -39,38 +38,42 @@ export function prepareCalculationPalette(sheet: ParsedSheet, palette: string): 
   for (let index = 0; index < sheet.skills.length; index++) {
     const skill = sheet.skills[index];
     if (/パッシブ|アイテム/.test(skill.timing)) continue;
-    const start = rows.findIndex(row => !claimed.has(row) && row.text.includes(`《${skill.name}》${skill.level}を使用。`));
-    if (start < 0) continue; // Preplay skills are deliberately outside active roll generation.
-    claimed.add(rows[start]);
-    let end = start + 1;
-    while (end < rows.length && rows[end].text !== "" && !rows[end].text.startsWith("### ")) end++;
-    const rolls = skillRolls(skill, index, analysis.reviews);
-    const attack = attackKind(skill);
-    let insertion = start + 1;
-    for (let j = start + 1; j < end; j++) {
-      if (rows[j].text.startsWith(":" ) || rows[j].text === "対象：") {
-        if (!rows[j].text.startsWith(`:${skill.name}`)) insertion = j + 1;
-      }
-      const check = checkTarget(rows[j].text, `skill-${index}-check`, `《${skill.name}》 ${skill.judge}`, skill.name, attack);
-      if (check) {
-        check.attribute = rolls.find(r => r.kind === "damage")?.attribute;
-        // Non-attack recovery spells use magic checks, but not attack accuracy bonuses.
-        if (!attack && rolls.some(r => r.kind !== "damage")) check.base.dice = check.base.dice.replace(/\+\{命中BD\}/g, "");
-        rows[j] = { text: renderRoll(check), target: check }; insertion = j + 1;
-      }
-    }
+    const declarations = rows.filter(row => !claimed.has(row) && row.text.includes(`《${skill.name}》${skill.level}を使用。`));
+    if (!declarations.length) continue;
+    const rolls = skillRolls(skill, index, analysis.reviews), attack = attackKind(skill);
     const usable = rolls.filter(roll => {
       if (rolls.filter(r => r.kind === roll.kind).length > 1) {
         analysis.reviews.push({ source: skill.name, reason: "同じ種類の量が複数あり、式を一つに確定できません。", effect: skill.effect }); return false;
       }
       return true;
     });
-    rows.splice(insertion, 0, ...usable.map(roll => {
-      const target = roll.kind === "damage" ? { ...roll, base: damageBase(roll.base) } : roll;
-      return { text: renderRoll(target), target };
-    }));
+    for (let occurrence = 0; occurrence < declarations.length; occurrence++) {
+      const declaration = declarations[occurrence], start = rows.indexOf(declaration);
+      if (start < 0) continue;
+      claimed.add(declaration);
+      const idSuffix = occurrence ? `-copy-${occurrence}` : "";
+      let end = start + 1;
+      while (end < rows.length && rows[end].text !== "" && !rows[end].text.startsWith("### ") && !/《[^》]+》\d+を使用。/.test(rows[end].text)) end++;
+      let insertion = start + 1, checks = 0;
+      for (let j = start + 1; j < end; j++) {
+        if (rows[j].text.startsWith(":" ) || rows[j].text === "対象：") {
+          if (!rows[j].text.startsWith(`:${skill.name}`)) insertion = j + 1;
+        }
+        const checkId = `skill-${index}-check${idSuffix}${checks ? `-${checks}` : ""}`;
+        const check = checkTarget(rows[j].text, checkId, `《${skill.name}》 ${skill.judge}`, skill.name, attack);
+        if (check) {
+          checks++;
+          check.attribute = rolls.find(r => r.kind === "damage")?.attribute;
+          if (!attack && rolls.some(r => r.kind !== "damage")) check.base.dice = check.base.dice.replace(/\+\{命中BD\}/g, "");
+          rows[j] = { text: renderRoll(check), target: check }; insertion = j + 1;
+        }
+      }
+      rows.splice(insertion, 0, ...usable.map(roll => {
+        const target = { ...roll, id: roll.id + idSuffix, base: roll.kind === "damage" ? damageBase(roll.base) : { ...roll.base } };
+        return { text: renderRoll(target), target };
+      }));
+    }
   }
-  // Generic weapon and other existing checks also get individually selectable bonuses.
   let section = "";
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
@@ -119,7 +122,6 @@ export class TrackedPalette {
     }
     this.text = next;
   }
-  /** A deliberate rename changes tokens, not the user's other edits or checkbox ownership. */
   renameFlag(from: string, to: string): void {
     if (from === to) return;
     const previous = this.text;

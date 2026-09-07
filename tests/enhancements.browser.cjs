@@ -15,7 +15,7 @@ const raw={id:'autotest',characterName:'画面テスト',sheetURL:'https://yutor
   await page.locator('#url').fill(raw.sheetURL);await page.getByText('URLで読み込めない時だけ、ゆとシートJSONを手入力する',{exact:true}).click();
   await page.locator('#json').fill(JSON.stringify(raw));await page.locator('#gen').click();await page.waitForFunction(()=>document.querySelector('#warn').textContent!=='出力中...');
   assert.ok(!(await page.locator('#warn').innerText()).includes('失敗'));
-  const status=await page.locator('#statusEdit').inputValue();assert.match(status,/ダメバフ\t0\t0\nハイHPポーション\t3\t0/);
+  const status=await page.locator('#statusEdit').inputValue();assert.match(status,/ダメバフ\t0\t0\n強心丹D\t0\t0\nハイHPポーション\t3\t0/);
   assert.ok(!/^HPP\t/m.test(status));
   let text=await page.locator('#palette').inputValue();assert.equal((text.match(/4D ハイHPポーション/g)||[]).length,2);
   assert.ok(text.includes('+9 {ダメージ属性}ダメージ'));
@@ -44,7 +44,6 @@ const raw={id:'autotest',characterName:'画面テスト',sheetURL:'https://yutor
   await firstCheck.uncheck();assert.equal(await allChecks.evaluate(e=>e.indeterminate),true);
   await allChecks.click();await allChecks.uncheck();
   assert.equal(await individualChecks.evaluateAll(nodes=>nodes.every(n=>!n.checked)),true);assert.equal(await page.locator('#palette').inputValue(),text);
-  // The two attribute definitions are alternatives. Preserve validation until one is removed.
   await page.locator('#checkVariables').click();assert.match(await page.locator('#validationResults').innerText(),/ダメージ属性/);
   text=text.replace('//ダメージ属性=〈〉属性魔法\n','');await page.locator('#palette').fill(text);
   await page.locator('#copyBottom').click();const exported=JSON.parse(await page.evaluate(()=>navigator.clipboard.readText()));assert.equal(exported.data.commands,text);
@@ -54,7 +53,6 @@ const raw={id:'autotest',characterName:'画面テスト',sheetURL:'https://yutor
   assert.equal(await page.locator('#palette').inputValue(),text);assert.deepEqual(errors,[]);
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true);
   console.log('PASS: mobile generation, help, declaration, bulk/individual choices, copy and save/resume');
-  // Mouse-driven textarea resizing on a desktop viewport.
   await page.setViewportSize({width:1440,height:1000});
   for(const id of ['statusEdit','paramsEdit','vars','palette']) {
    const input=page.locator('#'+id);await input.scrollIntoViewIfNeeded();

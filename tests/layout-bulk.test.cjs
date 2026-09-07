@@ -51,7 +51,6 @@ test('bulk changes checks once per card, retaining modes and aliases',()=>{
  a[0].checked=false;assert.equal(a[1].checked,true);
  setAllCheckChoices([make(a),make(b)],false);assert.ok([...a,...b].every(s=>!s.checked));
 });
-// The following integration cases require the complete project; standalone validation reports them skipped.
 let parseYtsheet,buildPalette,buildStatus,prepare;
 if(!standalone) {
  ({parseYtsheet}=require(path.join(out,'ytsheet/parseYtsheet.js')));
@@ -64,10 +63,10 @@ test('empty inventory creates no starter statuses or declarations',{skip:standal
  for(const name of ['HPP','MPP','HHPP','HMPP','毒消し']){assert.ok(!statuses.some(x=>x.label===name));assert.ok(!p.includes(`で${name}を使用。`));}
  assert.ok(p.includes('//ダメージ属性=物理'));
 });
-test('table inventory is consecutive immediately after damage buff',{skip:standalone},()=>{
+test('spirit flag and table inventory are consecutive after damage buff',{skip:standalone},()=>{
  const s=sheet({items:'|ハイMPポーション|3|マイナー、メジャー。使用者の【MP】を［4D］点回復する。消耗品。|説明|@[1*3]|\n|試験薬|0|マイナー。消耗品。|説明|@[0]|'});
  const statuses=buildStatus(s,{}),index=statuses.findIndex(x=>x.label==='ダメバフ');
- assert.deepEqual(statuses.slice(index+1,index+3).map(x=>[x.label,x.value,x.max]),[['ハイMPポーション','3','0'],['試験薬','0','0']]);
+ assert.deepEqual(statuses.slice(index+1,index+4).map(x=>[x.label,x.value,x.max]),[['強心丹D','0','0'],['ハイMPポーション','3','0'],['試験薬','0','0']]);
  const p=buildPalette(s,{}).text;assert.ok(p.includes(':ハイMPポーション-1\n4D ハイMPポーション'));
 });
 test('preplay remains a single escaped line between checks and passives',{skip:standalone},()=>{

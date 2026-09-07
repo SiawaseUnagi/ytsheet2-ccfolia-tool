@@ -15,7 +15,7 @@ const TIMINGS: Record<string, [string, string]> = {
 export function itemLines(raw: Record<string, unknown>): string[] {
   return String(raw.items ?? "").replace(/&lt;br\s*\/?&gt;|<br\s*\/?>/gi, "\n").split(/\r?\n/);
 }
-/** Legacy shorthand remains quantity-only; never scan table prose or flavour for item names. */
+/** Shorthand is quantity-only; never scan table prose or flavour for item names. */
 export function plainItemRaw(raw: Record<string, unknown>): Record<string, unknown> {
   return { ...raw, items: itemLines(raw).filter(line => !line.includes("|")).join("\n") };
 }
@@ -23,11 +23,26 @@ const nameKey = (s: string) => s.normalize("NFKC").trim();
 export function matchesConsumable(item: TableConsumable, def: ConsumableDef): boolean {
   return def.aliases.some(alias => nameKey(alias) === nameKey(item.label));
 }
-function readTimings(effect: string): string[] | null {
-  const prefix = normalizeEffect(effect).split("。")[0].replace(/^タイミング[:：]\s*/, "");
-  const tokens = prefix.split(/[、,／/・]/).map(t => t.trim().replace(/(?:アクション|プロセス)$/, "").replace(/ダメージロール/g, "DR").replace(/の直/g, "直"));
+/** Only complete timing declarations count. References to expiry, cancelling an effect,
+ * prerequisites, examples and quoted text are not additional usage timings. */
+function timingSentence(sentence: string): string[] | null {
+  const text = normalizeEffect(sentence).trim().replace(/^タイミング[:：]\s*/, "")
+    .replace(/(?:で|に)(?:も)?使用(?:することができる|可能となる|可能|できる|する)$/, "").trim();
+  const tokens = text.split(/[、,／/・]/).map(t => t.trim().replace(/(?:アクション|プロセス)$/, "").replace(/ダメージロール/g, "DR").replace(/の直/g, "直"));
   if (!tokens.length || tokens.some(t => !Object.prototype.hasOwnProperty.call(TIMINGS, t))) return null;
   return [...new Set(tokens.map(t => TIMINGS[t][0]))];
+}
+function effectParts(effect: string): { text: string; timing: string[] | null }[] {
+  // Preserve original characters in the displayed body, including brackets and numerals.
+  const clean = effect.replace(/\s+/g, " ").trim();
+  return (clean.match(/[^。]+。?/g) ?? []).map(text => ({ text, timing: timingSentence(text.replace(/。$/, "")) }));
+}
+function readTimings(effect: string): string[] | null {
+  const timings = [...new Set(effectParts(effect).flatMap(part => part.timing ?? []))];
+  return timings.length ? timings : null;
+}
+export function consumableEffectText(effect: string): string {
+  return effectParts(effect).filter(part => !part.timing).map(part => part.text).join("").trim();
 }
 function readRecoveryRolls(effect: string, label: string, warnings: string[]): string[] {
   const text = normalizeEffect(effect), values: { resource: string; formula: string }[] = [];
@@ -50,7 +65,7 @@ function readRecoveryRolls(effect: string, label: string, warnings: string[]): s
   return values.map(v => `${v.formula} ${label}`);
 }
 
-/** Supported row: |name|count|timings. effect. consumable.|flavour|@[weight]| */
+/** Supported row: |name|count|effect including explicit timing and consumable.|flavour|@[weight]| */
 export function readConsumableTable(raw: Record<string, unknown>): ConsumableTable {
   const items = new Map<string, TableConsumable>(), rejected = new Set<string>(), warnings: string[] = [];
   const skillNames = new Set(Object.keys(raw).filter(key => /^skill\d+Name$/.test(key)).map(key => String(raw[key])));
@@ -85,7 +100,7 @@ export function readConsumableTable(raw: Record<string, unknown>): ConsumableTab
 export function consumableCommands(item: TableConsumable, timing: string): string[] {
   if (!item.timings.includes(timing)) return [];
   const prefix = TIMINGS[timing]?.[1] ?? "";
-  const lines = [`${prefix}${item.label}を使用。`, `:${item.label}-1`, ...item.rolls];
+  const lines = [`${prefix}${item.label}を使用。${consumableEffectText(item.effect)}`, `:${item.label}-1`, ...item.rolls];
   if (nameKey(item.label) === "強心丹") lines.push(":強心丹D=1");
   return lines;
 }

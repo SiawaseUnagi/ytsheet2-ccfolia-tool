@@ -11,7 +11,7 @@ function sec() {
     ["フリー", []],
     ["ムーブ", ["ムーブアクション放棄。", "ムーブアクションで戦闘移動を行なう。({移動力}m)", "ムーブアクションで全力移動を行なう。({移動力}+5m)", "ムーブアクションで離脱を行なう。"]],
     ["レガシー", []],
-    ["マイナー", ["マイナーアクション放棄。"]],
+    ["マイナー", ["マイナーアクション放棄。", ""]],
     ["メジャー", []],
     ["判定の直前", []],
     ["判定の直後", []],
@@ -96,7 +96,10 @@ type SkillOutput = {
   resets: { scope: "scene" | "scenario"; line: string }[]; usageLimit: unknown;
 };
 function pushResets(map: Map<string, string[]>, resets: SkillOutput["resets"]) {
-  for (const r of resets) map.get(r.scope === "scene" ? "シーン終了時リセット" : "シナリオ終了時リセット")?.push(r.line);
+  for (const r of resets) {
+    const lines = map.get(r.scope === "scene" ? "シーン終了時リセット" : "シナリオ終了時リセット");
+    if (lines && !lines.includes(r.line)) lines.push(r.line);
+  }
 }
 
 export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): { text: string; warnings: string[] } {
@@ -110,22 +113,33 @@ export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): { te
     return { skill, target: mapTiming(skill.timing), lines: out.lines, resets: out.resets, usageLimit: out.usageLimit };
   });
   const preplaySkills: YtSkill[] = [];
+  let emitted = 0;
   for (const root of placement.roots) {
     const preplayRoot = isPreplaySkill(outputs[root].skill);
     const target = preplayRoot ? "プリプレイ" : outputs[root].target;
-    const stack = [root];
+    const stack: { index: number; timing?: string; path: number[] }[] = [{ index: root, path: [] }];
     while (stack.length) {
-      const index = stack.pop()!, item = outputs[index];
+      const entry = stack.pop()!, { index, path } = entry, item = outputs[index];
+      if (path.includes(index) || ++emitted > 10000) {
+        warnings.push(`《${item.skill.name}》：追加配置が循環するか多すぎるため、一部の配置を省きました。`); break;
+      }
       if (preplayRoot && isPreplaySkill(item.skill)) preplaySkills.push(item.skill);
       else {
         const lines = s.get(target)!, passive = /パッシブ/.test(item.skill.timing);
-        // Bound active blocks so result rolls stay attached to their own declarations.
+        // The extra occurrence declares the effective timing; effects, cost, rolls and
+        // the shared usage counter remain those of the original skill.
+        const out = entry.timing ? skillToLines({ ...item.skill, timing: entry.timing }, custom) : item;
         if (!passive && lines.length && lines[lines.length - 1] !== "") lines.push("");
-        lines.push(...item.lines);
+        lines.push(...out.lines);
         if (!passive || target !== "パッシブ") lines.push("");
-        pushResets(s, item.resets);
+        pushResets(s, out.resets);
       }
-      stack.push(...[...(placement.children.get(index) ?? [])].reverse());
+      const nextPath = [...path, index];
+      const next = [
+        ...(placement.alternates.get(index) ?? []).map(copy => ({ ...copy, path: nextPath })),
+        ...(placement.children.get(index) ?? []).map(child => ({ index: child, path: nextPath })),
+      ];
+      stack.push(...next.reverse());
     }
   }
   const preplay = preplayDeclarationLine(preplaySkills);
