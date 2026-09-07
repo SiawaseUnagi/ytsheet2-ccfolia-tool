@@ -1,6 +1,7 @@
 import type { ParsedSheet, YtSkill } from "../ytsheet/types";
 import { leadingAmount, normalizeEffect, type Amount } from "./expression";
 import { directAttackKind, equipmentToggle, isBearUp } from "./attack";
+import { readInventoryEffects } from "../items/inventoryEffects";
 
 export type RollKind = "check" | "damage" | "hpHeal" | "mpHeal" | "hpSet" | "effect";
 export type AttackKind = "weapon" | "melee" | "ranged" | "magic";
@@ -12,7 +13,7 @@ export type Modifier = {
   id: string; source: string; level?: number; effect: string; amount: Amount;
   kinds: RollKind[]; attack?: AttackKind; judge?: string; hitOnly?: boolean;
   magicOnly?: boolean; penetrationOnly?: boolean; diceOnly?: boolean; onlySkill?: string; attribute?: string;
-  flag: string; conditional: boolean; condition: string;
+  flag: string; conditional: boolean; condition: string; origin?: "equipment" | "inventory";
 };
 export type Review = { source: string; reason: string; effect: string };
 export type Analysis = { modifiers: Modifier[]; reviews: Review[] };
@@ -82,7 +83,6 @@ function classify(prefix: string, full: string): Partial<Modifier> | null {
   if (/(?:あらゆる|すべての|全ての)ダイスロール/.test(prefix)) {
     return { kinds: ["check", "damage", "hpHeal", "mpHeal", "hpSet", "effect"], diceOnly: true };
   }
-  // Checks are not damage rolls, recovery amounts or standalone effect rolls.
   if (/(?:あらゆる|すべての|全ての|すべて|全て|全)判定/.test(prefix)) return { kinds: ["check"] };
   if (/回復/.test(prefix) && /効果|回復量|回復/.test(prefix)) {
     if (/受ける|受けた|受けて/.test(prefix)) return null;
@@ -100,17 +100,25 @@ function classify(prefix: string, full: string): Partial<Modifier> | null {
   }
   return null;
 }
+type EffectSource = {
+  name: string; level: number; timing: string; effect: string; usage: string; id: string;
+  ownAttack?: AttackKind; skill?: YtSkill; origin?: "equipment" | "inventory"; counted?: boolean;
+};
 export function analyzeModifiers(sheet: ParsedSheet): Analysis {
   const modifiers: Modifier[] = [], reviews: Review[] = [];
-  const sources = sheet.skills.map((skill, index) => ({ name: skill.name, level: skill.level, timing: skill.timing,
-    effect: skill.effect, usage: skill.usage, ownAttack: attackKind(skill), skill: skill as YtSkill | undefined, id: `skill-${index}` }));
+  const sources: EffectSource[] = sheet.skills.map((skill, index) => ({ name: skill.name, level: skill.level, timing: skill.timing,
+    effect: skill.effect, usage: skill.usage, ownAttack: attackKind(skill), skill, id: `skill-${index}` }));
   for (const slot of ["HandR", "HandL", "Head", "Body", "Sub", "Other"]) {
     const name = String(sheet.raw[`armament${slot}Name`] ?? "").trim();
     const effect = String(sheet.raw[`armament${slot}Note`] ?? "").trim();
-    if (name && effect) sources.push({ name, level: 0, timing: "装備", effect, usage: "", ownAttack: undefined, skill: undefined, id: `item-${slot}` });
+    if (name && effect) sources.push({ name, level: 0, timing: "装備", effect, usage: "", id: `item-${slot}`, origin: "equipment" });
   }
+  const inventory = readInventoryEffects(sheet.raw);
+  reviews.push(...inventory.warnings);
+  for (const item of inventory.items) sources.push({ name: item.name, level: 0, timing: "所持品", effect: item.effect,
+    usage: "", id: `inventory-${encodeURIComponent(item.name)}`, origin: "inventory", counted: item.counted });
   for (const source of sources) {
-    if (source.skill && isBearUp(source.name)) continue; // Included only in the dedicated spirit reaction roll.
+    if (source.skill && isBearUp(source.name)) continue;
     const full = normalizeEffect(`${source.effect} ${source.usage}`);
     const relevant = /(?:ダメージ|回復|判定|ダイスロール)[^。]*に\s*[+\-]/.test(full);
     if (!relevant) continue;
@@ -121,28 +129,42 @@ export function analyzeModifiers(sheet: ParsedSheet): Analysis {
     let found = false, offset = 0;
     const normalized = normalizeEffect(source.effect);
     for (const sentence of normalized.split("。")) {
+      let clauseStart = 0;
       for (const m of sentence.matchAll(/に\s*([+\-])\s*/g)) {
-        const prefix = sentence.slice(0, m.index);
+        const prefix = sentence.slice(clauseStart, m.index);
+        const parsed = leadingAmount(sentence.slice(m.index! + m[0].length), source.level);
+        if (!parsed || !/^(?:点|する|し[、,]|させ|$|[、,」])/.test(parsed.rest)) continue;
+        // Do not inherit "damage" or "check" from an earlier +1 clause into a defence/initiative clause.
+        clauseStart = sentence.length - parsed.rest.length;
         const type = classify(prefix, full);
         if (!type?.kinds) continue;
-        const parsed = leadingAmount(sentence.slice(m.index! + m[0].length), source.level);
-        if (!parsed || !/^(?:点|する|させ|$|[、,」])/.test(parsed.rest)) continue;
+        if (type.kinds.some(kind => kind === "hpHeal" || kind === "mpHeal") && /ポーション|食料/.test(full) && !/スキル[^。]*アイテム|アイテム[^。]*スキル/.test(full)) {
+          reviews.push({ source: source.name, reason: "特定のアイテムの回復量だけに効く補正です。スキルの回復量には自動加算せず、対象のアイテム式を手入力で調整してください。", effect: source.effect }); found = true; continue;
+        }
         const amount = m[1] === "-" ? {
           dice: parsed.amount.dice === "0" ? "0" : `-(${parsed.amount.dice})`,
           fixed: parsed.amount.fixed === "0" ? "0" : `-(${parsed.amount.fixed})`,
         } : parsed.amount;
-        if (source.timing === "装備" && /SL/.test(sentence.slice(m.index))) continue;
-        const active = !/パッシブ|装備/.test(source.timing) && !source.ownAttack;
+        if (source.origin && /SL/.test(sentence.slice(m.index))) continue;
+        // Strong-heart medicine already has a dedicated, shared +1D spirit flag.
+        if (source.origin === "inventory" && source.name.normalize("NFKC") === "強心丹" && type.judge === "精神" && amount.dice === "1" && amount.fixed === "0") { found = true; continue; }
+        const active = !/パッシブ|装備|所持品/.test(source.timing) && !source.ownAttack;
         const conditionText = full.replace(/クリティカル[:：][^。]*/g, "");
         const conditionInText = active || /時|場合|いる間|効果中|クリティカル|場所|受けている|終了まで|暗闇|狂戦士化/.test(conditionText) || /装備|使用/.test(source.usage);
-        const conditional = source.timing === "装備" ? equipmentToggle(normalized.slice(0, offset + m.index!), conditionInText) : conditionInText;
+        const beforeBonus = normalized.slice(0, offset + m.index!);
+        let conditional = source.timing === "装備" ? equipmentToggle(beforeBonus, conditionInText) : conditionInText;
+        if (source.origin === "inventory") {
+          const holderPassive = /所持者|携帯者|携帯している|所持している/.test(full) && !/装備者/.test(full);
+          conditional = !!source.counted || !holderPassive || equipmentToggle(beforeBonus, true) || conditionInText || /ただし|以外|種別|専用の武器/.test(full);
+        }
         const limited = /(?:シーン|シナリオ|ラウンド).{0,12}回/.test(source.usage);
-        const flag = limited || /^(?:HP|MP|CL|フェイト|攻撃力|移動力)$/.test(source.name) ? `${source.name}_補正` : source.name;
+        const sameSkillName = source.origin === "inventory" && sheet.skills.some(skill => skill.name === source.name);
+        const flag = source.counted || sameSkillName || limited || /^(?:HP|MP|CL|フェイト|攻撃力|移動力)$/.test(source.name) ? `${source.name}_補正` : source.name;
         modifiers.push({ id: `${source.id}-${modifiers.length}`, source: source.name,
-          level: source.timing === "装備" ? undefined : source.level,
+          level: source.origin ? undefined : source.level, ...(source.origin ? { origin: source.origin } : {}),
           effect: `${source.effect}${source.usage && source.usage !== "―" ? ` 使用条件：${source.usage}` : ""}`,
           amount, kinds: type.kinds, ...type, attribute: /[〈<]([^〉>]+)[〉>]属性/.exec(prefix)?.[1], flag, conditional,
-          condition: conditionInText ? "条件・持続時間・適用対象を原文で確認してください。" : "ゆとシートに反映済みなら選ばないでください。",
+          condition: conditionInText || conditional ? "条件・持続時間・適用対象を原文で確認してください。" : "ゆとシートに反映済みなら選ばないでください。",
           onlySkill: source.ownAttack ? source.name : undefined });
         found = true;
       }
@@ -154,7 +176,6 @@ export function analyzeModifiers(sheet: ParsedSheet): Analysis {
   return { modifiers, reviews };
 }
 export function compatible(modifier: Modifier, target: RollTarget): boolean {
-  // A weapon accuracy check can oppose an attack without dealing damage itself.
   const targetAttack = target.attack ?? (target.kind === "check" && /命中/.test(target.judge ?? "") ? "weapon" : undefined);
   if (!modifier.kinds.includes(target.kind)) return false;
   if (modifier.attribute && modifier.attribute !== target.attribute) return false;

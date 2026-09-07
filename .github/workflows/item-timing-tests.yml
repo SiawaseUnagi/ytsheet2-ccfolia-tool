@@ -24,3 +24,5 @@ jobs:
         run: node tests/enhancements.browser.cjs && node tests/parameter-mode.browser.cjs
       - name: Item bodies, alternate timings and saved grouped modifiers
         run: node tests/item-timing.browser.cjs
+      - name: Inventory and equipment correction controls
+        run: node tests/inventory-effects.browser.cjs

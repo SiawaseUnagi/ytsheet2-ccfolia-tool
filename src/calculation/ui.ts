@@ -14,7 +14,8 @@ function describe(modifier: Modifier): string {
   const p: string[] = [];
   if (modifier.amount.dice !== "0") p.push(`ダイス ${modifier.amount.dice}`);
   if (modifier.amount.fixed !== "0") p.push(`固定値 ${modifier.amount.fixed}`);
-  return `${modifier.source}${modifier.level === undefined ? "（装備）" : `（スキルレベル${modifier.level}）`}：${p.join(" / ")}`;
+  const origin = modifier.origin === "inventory" ? "（アイテム）" : modifier.level === undefined ? "（装備）" : `（スキルレベル${modifier.level}）`;
+  return `${modifier.source}${origin}：${p.join(" / ")}`;
 }
 
 /** Save/restore uses semantic keys, not the source sheet's shifting row numbers. */
