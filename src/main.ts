@@ -18,7 +18,7 @@ import { switchParameterMode } from "./editor/parameterMode";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 app.innerHTML = `<main style="max-width:1000px;margin:auto;padding:16px;font-family:sans-serif">
-<h1>ゆとシートⅡ→ココフォリア変換 v0.1</h1>
+<h1>ゆとシートⅡ→ココフォリア変換</h1>
 <label>ゆとシートURL<input id='url' placeholder='https://yutorize.work/ytsheet/ar2e/?id=...' style='width:100%;box-sizing:border-box;margin:4px 0 8px'/></label>
 <div style='display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 16px'>
   <button id='gen'>出力</button>

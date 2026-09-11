@@ -16,7 +16,11 @@ export function renderRoll(target: RollTarget, selected: Selection[] = []): stri
   }
   const simpleDice = (target.kind === "hpSet" || target.kind === "effect") && /^\d+$/.test(dice);
   const formula = dice === "0" ? `C(${fixed})` : `${simpleDice ? dice : `(${dice})`}D${fixed === "0" ? "" : (fixed.startsWith("-") ? fixed : `+${fixed}`)}`;
-  return `${formula}${target.kind === "check" ? ">=0" : ""} ${target.suffix}`;
+  // Format the display only; keep source labels unchanged for saved modifier keys.
+  const suffix = target.kind === "check"
+    ? target.suffix.replace(/^(?:【)?(筋力|器用|敏捷|知力|感知|精神|幸運)(?:】)?(?:判定)?$/, "【$1】判定")
+    : target.suffix;
+  return `${formula}${target.kind === "check" ? ">=0" : ""} ${suffix}`;
 }
 
 function checkTarget(line: string, id: string, title: string, skillName?: string, attack?: RollTarget["attack"]): RollTarget | null {
