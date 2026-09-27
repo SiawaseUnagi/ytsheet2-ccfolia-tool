@@ -43,7 +43,13 @@ const raw={id:'autotest',characterName:'画面テスト',sheetURL:'https://yutor
   await firstCheck.evaluate(e=>{let p=e.parentElement;while(p){if(p.tagName==='DETAILS')p.open=true;p=p.parentElement;}});
   await firstCheck.uncheck();assert.equal(await allChecks.evaluate(e=>e.indeterminate),true);
   await allChecks.click();await allChecks.uncheck();
-  assert.equal(await individualChecks.evaluateAll(nodes=>nodes.every(n=>!n.checked)),true);assert.equal(await page.locator('#palette').inputValue(),text);
+  assert.equal(await individualChecks.evaluateAll(nodes=>nodes.every(n=>!n.checked)),true);
+  // Formulas return to their original values; the newly added local off control remains.
+  const retained=text.replace(':セイクリッドダンス=1\n',':セイクリッドダンス=1\n:セイクリッドダンス=0\n');
+  assert.equal(await page.locator('#palette').inputValue(),retained);
+  assert.equal((retained.match(/:セイクリッドダンス=1/g)||[]).length,1);
+  assert.equal((retained.match(/:セイクリッドダンス=0/g)||[]).length,2);
+  text=retained;
   await page.locator('#checkVariables').click();assert.match(await page.locator('#validationResults').innerText(),/ダメージ属性/);
   text=text.replace('//ダメージ属性=〈〉属性魔法\n','');await page.locator('#palette').fill(text);
   await page.locator('#copyBottom').click();const exported=JSON.parse(await page.evaluate(()=>navigator.clipboard.readText()));assert.equal(exported.data.commands,text);

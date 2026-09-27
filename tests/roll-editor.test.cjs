@@ -110,7 +110,15 @@ test('legacy hpSet key and all-dice modifier key survive presentation changes',(
 test('shared alias rename remains synchronized with checkbox ownership',()=>{
  const p=prepared(checks,[{...m,conditional:true}]),u=mount(p);try{
   u.boxes[0].checked=true;u.boxes[0].onchange();const input=walk(u.host,e=>e.type==='text')[0];input.value='EV';walk(u.host,e=>e.textContent==='名前を適用')[0].onclick();assert.equal((u.palette.value.match(/\{EV\}/g)||[]).length,2);assert.deepEqual(u.statuses,['EV']);
-  u.boxes[0].checked=false;u.boxes[0].onchange();assert.equal(u.palette.value,p.text);
+  u.boxes[0].checked=false;u.boxes[0].onchange();
+  // Disabling the bonus restores both formulas, while retaining generated controls.
+  const controls='\n### ■補正フラグ\n:EV=1\n:EV=0';
+  assert.equal(u.palette.value,p.text+controls);
+  u.boxes[0].checked=true;u.boxes[0].onchange();
+  assert.equal((u.palette.value.match(/\{EV\}/g)||[]).length,2);
+  assert.equal((u.palette.value.match(/:EV=1/g)||[]).length,1);
+  assert.equal((u.palette.value.match(/:EV=0/g)||[]).length,1);
+  assert.ok(!u.palette.value.includes(':回避強化='));
  }finally{u.dispose()}
 });
 test('persistent explanations are in help, not the main correction panel',()=>{

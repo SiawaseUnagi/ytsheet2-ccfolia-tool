@@ -1,3 +1,4 @@
+import { isEvasionCompanion } from "./checkPlacement";
 import { planSkillPlacement } from "./skillPlacement";
 import type { CustomCommandMap, ParsedSheet, YtSkill } from "../ytsheet/types";
 import { skillToLines } from "./buildSkillCommands";
@@ -104,6 +105,8 @@ function pushResets(map: Map<string, string[]>, resets: SkillOutput["resets"]) {
 
 export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): { text: string; warnings: string[] } {
   const s = sec(), warnings = [...sheet.warnings];
+  const evasionSection = "__evasion_companions";
+  s.set(evasionSection, []);
   s.get("メジャー")?.push(...weaponAttackLines(), "");
   const placement = planSkillPlacement(sheet.skills);
   warnings.push(...placement.warnings);
@@ -116,7 +119,7 @@ export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): { te
   let emitted = 0;
   for (const root of placement.roots) {
     const preplayRoot = isPreplaySkill(outputs[root].skill);
-    const target = preplayRoot ? "プリプレイ" : outputs[root].target;
+    const target = preplayRoot ? "プリプレイ" : isEvasionCompanion(outputs[root].skill) ? evasionSection : outputs[root].target;
     const stack: { index: number; timing?: string; path: number[] }[] = [{ index: root, path: [] }];
     while (stack.length) {
       const entry = stack.pop()!, { index, path } = entry, item = outputs[index];
@@ -128,7 +131,8 @@ export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): { te
         const lines = s.get(target)!, passive = /パッシブ/.test(item.skill.timing);
         // The extra occurrence declares the effective timing; effects, cost, rolls and
         // the shared usage counter remain those of the original skill.
-        const out = entry.timing ? skillToLines({ ...item.skill, timing: entry.timing }, custom) : item;
+        const timing = entry.timing ?? (isEvasionCompanion(item.skill) ? "回避判定と同時" : undefined);
+        const out = timing ? skillToLines({ ...item.skill, timing }, custom) : item;
         if (!passive && lines.length && lines[lines.length - 1] !== "") lines.push("");
         lines.push(...out.lines);
         if (!passive || target !== "パッシブ") lines.push("");
@@ -164,5 +168,14 @@ export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): { te
     "({呪歌判定ダイス}+{判定BD})D+{呪歌判定}>=0 呪歌判定",
     "({錬金術判定ダイス}+{判定BD})D+{錬金術判定}>=0 錬金術判定",
   );
+  // Duplicate the complete companion block under both common evasion rolls.
+  // Counters and resets were created once above and are shared by these copies.
+  const evasionLines = s.get(evasionSection)!;
+  s.delete(evasionSection);
+  if (evasionLines.length) for (const section of ["リソース操作", "判定"]) {
+    const lines = s.get(section)!;
+    const anchor = lines.findIndex(line => line.endsWith(">=0 回避判定"));
+    if (anchor >= 0) lines.splice(anchor + 1, 0, ...evasionLines);
+  }
   return { text: [...s].map(([name, lines]) => `### ■${name}\n${lines.join("\n")}`.trimEnd()).join("\n\n"), warnings };
 }

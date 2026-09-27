@@ -43,8 +43,9 @@ export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): { te
       continue;
     }
     if (line.startsWith("({精神判定ダイス}+{判定BD}") && !line.includes("{強心丹D}")) line = line.replace("{精神判定ダイス}+{判定BD}", "{精神判定ダイス}+{判定BD}+{強心丹D}");
+    // Keep evasion companions directly below evasion; spirit reaction follows them.
+    if (section === "リソース操作" && line === "c(-{物理防御力}) 物理ダメージ計算") result.push(spiritReaction(sheet));
     result.push(line);
-    if (section === "リソース操作" && line.endsWith(">=0 回避判定")) result.push(spiritReaction(sheet));
   }
   return { text: result.join("\n"), warnings: [...original.warnings, ...parsed.warnings] };
 }
