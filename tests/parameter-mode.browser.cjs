@@ -93,6 +93,7 @@ const raw={id:'mode-test',characterName:'出力方式テスト',sheetURL:'https:
   assert.equal(await page.locator('#palette').inputValue(),initialPalette);
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true);
   assert.deepEqual(errors,[]);
+  await require('./check-flags.browser-cases.cjs')(context, url);
   console.log('PASS: live mode switch, hand edits, labels, collapsed groups, copy, browser save/resume, file export/import and sheet update');
  }finally{if(browser)await browser.close();server.kill();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

@@ -84,7 +84,7 @@ export function ensureFlagCommands(tracker: TrackedPalette, selections: Selectio
     } else {
       const boundary = current.find(r => /^### ■(?:シーン|シナリオ).*リセット/.test(r.text));
       if (boundary) insert(tracker, boundary.start, `${heading}\n${commands.join("\n")}\n\n`);
-      else insert(tracker, tracker.text.length, `${tracker.text.endsWith("\n\n") ? "" : "\n\n"}${heading}\n${commands.join("\n")}`);
+      else insert(tracker, tracker.text.length, `${tracker.text.endsWith("\n\n") ? "" : tracker.text.endsWith("\n") ? "\n" : "\n\n"}${heading}\n${commands.join("\n")}`);
     }
   }
 }
