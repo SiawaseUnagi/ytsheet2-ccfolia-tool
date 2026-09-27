@@ -3,6 +3,7 @@ import { groupCalculationTargets } from "./groups";
 import { compatible, type Modifier, type RollTarget } from "./analysis";
 import { renderRoll, TrackedPalette, type PreparedPalette, type Selection } from "./palette";
 import { validateFlagName } from "./flagNames";
+import { ensureFlagCommands } from "./flagCommands";
 import { emptyCalculationState, locateSavedRanges, modifierKey, targetKey, type CalculationState, type CalculationEditor } from "./sessionState";
 
 type Hooks = { ensureFlag: (label: string) => string; renameFlag: (previous: string, requested: string) => string; changed: () => void };
@@ -72,9 +73,11 @@ export function mountCalculationEditor(host: HTMLElement, prepared: PreparedPale
       const rebuild = () => {
         tracker.observe(palette.value);
         let protectedCount = 0;
+        const selected = linked.map((_, index) => selections(true, index));
         linked.forEach((member, index) => {
-          if (!tracker.replace(member.id, renderRoll(member, selections(true, index)))) protectedCount++;
+          if (!tracker.replace(member.id, renderRoll(member, selected[index]))) protectedCount++;
         });
+        ensureFlagCommands(tracker, selected.flat());
         palette.value = tracker.text;
         refreshPreview();
         message.textContent = protectedCount

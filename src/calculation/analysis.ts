@@ -1,3 +1,4 @@
+import { checkModifierNames, matchesCheckNames } from "./checkNames";
 import type { ParsedSheet, YtSkill } from "../ytsheet/types";
 import { leadingAmount, normalizeEffect, type Amount } from "./expression";
 import { directAttackKind, equipmentToggle, isBearUp } from "./attack";
@@ -79,7 +80,7 @@ function attackScope(text: string): AttackKind | undefined {
   if (/武器(?:攻撃|を使用)/.test(text)) return "weapon";
   return undefined;
 }
-function classify(prefix: string, full: string): Partial<Modifier> | null {
+function classify(prefix: string, full: string, preceding: string): Partial<Modifier> | null {
   if (/(?:あらゆる|すべての|全ての)ダイスロール/.test(prefix)) {
     return { kinds: ["check", "damage", "hpHeal", "mpHeal", "hpSet", "effect"], diceOnly: true };
   }
@@ -94,9 +95,10 @@ function classify(prefix: string, full: string): Partial<Modifier> | null {
     return { kinds: ["damage"], attack: attackScope(prefix) ?? attackScope(full), penetrationOnly: /貫通ダメージ.*有効/.test(full) };
   }
   if (/判定/.test(prefix)) {
-    const name = /(魔術|呪歌|錬金術|命中|回避|筋力|器用|敏捷|知力|感知|精神|幸運)/.exec(prefix)?.[1];
-    if (!name) return null;
-    return { kinds: ["check"], judge: name === "命中" ? undefined : name, hitOnly: name === "命中", attack: attackScope(prefix) };
+    const names = checkModifierNames(prefix, preceding);
+    if (!names.length) return null;
+    const hitOnly = names.length === 1 && names[0] === "命中";
+    return { kinds: ["check"], judge: hitOnly ? undefined : names.join("|"), hitOnly, attack: attackScope(prefix) };
   }
   return null;
 }
@@ -136,7 +138,7 @@ export function analyzeModifiers(sheet: ParsedSheet): Analysis {
         if (!parsed || !/^(?:点|する|し[、,]|させ|$|[、,」])/.test(parsed.rest)) continue;
         // Do not inherit "damage" or "check" from an earlier +1 clause into a defence/initiative clause.
         clauseStart = sentence.length - parsed.rest.length;
-        const type = classify(prefix, full);
+        const type = classify(prefix, full, normalized.slice(0, offset));
         if (!type?.kinds) continue;
         if (type.kinds.some(kind => kind === "hpHeal" || kind === "mpHeal") && /ポーション|食料/.test(full) && !/スキル[^。]*アイテム|アイテム[^。]*スキル/.test(full)) {
           reviews.push({ source: source.name, reason: "特定のアイテムの回復量だけに効く補正です。スキルの回復量には自動加算せず、対象のアイテム式を手入力で調整してください。", effect: source.effect }); found = true; continue;
@@ -183,7 +185,7 @@ export function compatible(modifier: Modifier, target: RollTarget): boolean {
   if (modifier.magicOnly && !target.magic) return false;
   if (modifier.penetrationOnly && !/貫通/.test(target.suffix)) return false;
   if (modifier.diceOnly && target.base.dice === "0") return false;
-  if (modifier.judge && !target.judge?.includes(modifier.judge)) return false;
+  if (modifier.judge && !matchesCheckNames(modifier.judge, target.judge ?? "", !!targetAttack)) return false;
   if (modifier.hitOnly && !targetAttack) return false;
   if (modifier.attack === "magic" && targetAttack !== "magic") return false;
   if (modifier.attack && modifier.attack !== "magic") {

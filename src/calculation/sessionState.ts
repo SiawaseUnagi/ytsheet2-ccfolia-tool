@@ -1,5 +1,6 @@
 import { compatible, type Modifier, type RollTarget } from "./analysis";
-import { renderRoll, type PreparedPalette, type Selection } from "./palette";
+import { renderRoll, TrackedPalette, type PreparedPalette, type Selection } from "./palette";
+import { ensureFlagCommands } from "./flagCommands";
 
 export type CalculationState = {
   version: 1;
@@ -45,7 +46,9 @@ export function applyCalculationState(prepared: PreparedPalette, state: Calculat
     return { ...range, start, end: text.length, expected, edited: false };
   });
   text += prepared.text.slice(cursor);
-  return { ...prepared, text, ranges };
+  const tracker = new TrackedPalette(text, ranges);
+  ensureFlagCommands(tracker, prepared.targets.flatMap(target => selectionsFor(prepared, target, state)));
+  return { ...prepared, text: tracker.text, ranges: tracker.ranges };
 }
 
 /** Remap only exact formula lines in the same skill/section. Other text is treated as user-owned. */
