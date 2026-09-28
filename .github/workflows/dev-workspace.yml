@@ -1,0 +1,28 @@
+name: Prepare development workspace
+on:
+  push:
+    branches: [feat/handoff-four-items-20260928]
+    paths: [.github/workflows/dev-workspace.yml]
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: 313aff5d8737cd8251e1977c08f61bcca1906002
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Package source and locked development dependencies
+        run: |
+          tar --exclude=.git -czf "$RUNNER_TEMP/ytsheet-workspace.tar.gz" .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: development-workspace-313aff5
+          path: ${{ runner.temp }}/ytsheet-workspace.tar.gz
+          retention-days: 1
