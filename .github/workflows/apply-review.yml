@@ -1,9 +1,8 @@
 name: Apply maintenance review fixes
 on:
-  push:
-    branches: [maintenance/apply-review-fixes]
-    paths:
-      - ".github/apply/READY"
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
 permissions:
   contents: write
 jobs:
@@ -13,6 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
+          ref: maintenance/apply-review-fixes
           fetch-depth: 0
       - uses: actions/setup-node@v6
         with:
@@ -21,6 +21,7 @@ jobs:
         run: |
           cat .github/apply/part-* > /tmp/review.patch.b64
           base64 -d /tmp/review.patch.b64 > /tmp/review.patch.gz
+          gzip -t /tmp/review.patch.gz
           gzip -dc /tmp/review.patch.gz > /tmp/review.patch
           git apply --check /tmp/review.patch
           git apply /tmp/review.patch
