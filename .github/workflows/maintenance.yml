@@ -6,19 +6,25 @@ on:
 permissions:
   contents: read
 jobs:
-  source:
+  prepare:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Resolve supported toolchain for maintenance tests
+        run: |
+          npm install --save-exact --save-dev vite@7.3 typescript@5.9.3 playwright@1.58.2
+          mkdir -p validation-artifacts
+          tar -czf validation-artifacts/dependencies.tar.gz node_modules package.json package-lock.json
+          git archive --format=tar 8083af2 src | gzip > validation-artifacts/legacy-source.tar.gz
+          npm audit --json > validation-artifacts/npm-audit.json || true
       - uses: actions/upload-artifact@v4
         with:
-          name: maintenance-source
-          path: |
-            src/
-            tests/
-            index.html
-            package.json
-            package-lock.json
-            tsconfig.json
-            vite.config.ts
+          name: maintenance-toolchain
+          path: validation-artifacts/
           retention-days: 7
