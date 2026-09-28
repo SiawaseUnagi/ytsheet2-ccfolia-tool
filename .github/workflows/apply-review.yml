@@ -34,6 +34,7 @@ jobs:
           # current workflow directory for this push; workflow cleanup/replacement is
           # applied afterwards through the authenticated GitHub connector.
           git checkout HEAD -- .github/workflows
+          rm -f .github/workflows/verify.yml
           rm -rf .github/apply
       - name: Verify
         run: |
