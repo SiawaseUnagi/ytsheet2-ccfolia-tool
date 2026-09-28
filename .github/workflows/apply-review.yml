@@ -17,10 +17,19 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 24
-      - name: Reassemble and apply reviewed patch
+      - name: Reassemble and verify reviewed patch
         run: |
           cat .github/apply/part-* > /tmp/review.patch.b64
+          echo "base64 bytes: $(wc -c < /tmp/review.patch.b64)"
+          echo "base64 sha256: $(sha256sum /tmp/review.patch.b64 | cut -d' ' -f1)"
+          if [ "$(wc -c < /tmp/review.patch.b64)" -ne 135176 ] || [ "$(sha256sum /tmp/review.patch.b64 | cut -d' ' -f1)" != "4d011110156fefca31a9b795364cf023b033a19a579793abdc553029992e3d5c" ]; then
+            echo "staged part hashes:"
+            sha256sum .github/apply/part-*
+            exit 1
+          fi
           base64 -d /tmp/review.patch.b64 > /tmp/review.patch.gz
+          echo "gzip sha256: $(sha256sum /tmp/review.patch.gz | cut -d' ' -f1)"
+          test "$(sha256sum /tmp/review.patch.gz | cut -d' ' -f1)" = "694c6c51eafb046de4c117d35f532790c16f1d1872cf7cfb37b39d395ca735be"
           gzip -t /tmp/review.patch.gz
           gzip -dc /tmp/review.patch.gz > /tmp/review.patch
           git apply --check /tmp/review.patch
