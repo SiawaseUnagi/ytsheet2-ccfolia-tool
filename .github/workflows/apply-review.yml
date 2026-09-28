@@ -30,7 +30,11 @@ jobs:
           git apply --check /tmp/review.patch
           git apply /tmp/review.patch
           sha256sum -c .github/apply/final-manifest.sha256
-          rm -rf .github/apply .github/workflows/apply-review.yml
+          # The GitHub Actions token cannot modify workflow files. Keep the branch's
+          # current workflow directory for this push; workflow cleanup/replacement is
+          # applied afterwards through the authenticated GitHub connector.
+          git checkout HEAD -- .github/workflows
+          rm -rf .github/apply
       - name: Verify
         run: |
           npm ci
