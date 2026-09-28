@@ -18,7 +18,7 @@ const raw={id:'autotest',characterName:'画面テスト',sheetURL:'https://yutor
   const status=await page.locator('#statusEdit').inputValue();assert.match(status,/ダメバフ\t0\t0\n強心丹D\t0\t0\nハイHPポーション\t3\t0/);
   assert.ok(!/^HPP\t/m.test(status));
   let text=await page.locator('#palette').inputValue();assert.equal((text.match(/4D ハイHPポーション/g)||[]).length,2);
-  assert.ok(text.includes('+9 {ダメージ属性}ダメージ'));
+  assert.ok(text.includes('+(3*3) {ダメージ属性}ダメージ'));
   assert.ok(text.includes(':initiative=\n//ダメージ属性=物理\n//ダメージ属性=〈〉属性魔法'));
   assert.ok(text.includes('プリプレイ\\n《ファミリア》1：使い魔を取得する。'));
   assert.equal(await page.locator('#vars').evaluate(e=>e.nextElementSibling.textContent),'チャットパレット');
@@ -31,7 +31,7 @@ const raw={id:'autotest',characterName:'画面テスト',sheetURL:'https://yutor
   assert.equal(await card.locator('..').evaluate(e=>e.open),false);
   await card.locator('..').locator(':scope > summary').click();await card.locator(':scope > summary').click();
   const box=card.locator('input[type="checkbox"]').first();assert.equal(await box.isChecked(),true);await box.uncheck();
-  text=await page.locator('#palette').inputValue();assert.ok(!text.includes('+9 {ダメージ属性}ダメージ'));
+  text=await page.locator('#palette').inputValue();assert.ok(!text.includes('+(3*3) {ダメージ属性}ダメージ'));
   const selectedChecks=await page.locator('#calculationEditor details[data-target-id] input[type="checkbox"]').evaluateAll(nodes=>nodes.filter(n=>n.checked).length);assert.equal(selectedChecks,0);
   const bulkPanel=page.locator('[data-bulk-checks="true"]'), checks=bulkPanel.locator('..');
   assert.equal(await checks.evaluate(e=>e.open),false);await checks.locator(':scope > summary').click();
