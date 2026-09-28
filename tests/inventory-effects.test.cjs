@@ -1,8 +1,8 @@
-const {test,after}=require('node:test'),assert=require('node:assert/strict');
-const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),{execFileSync}=require('node:child_process');
-const root=path.resolve(__dirname,'..'),out=fs.mkdtempSync(path.join(os.tmpdir(),'inventory-effects-'));
-after(()=>fs.rmSync(out,{recursive:true,force:true}));
-execFileSync(process.execPath,[path.join(root,'node_modules/typescript/bin/tsc'),'--project',path.join(root,'tsconfig.json'),'--noEmit','false','--module','commonjs','--moduleResolution','node','--outDir',out],{cwd:root,stdio:'inherit'});
+const {test, after} = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs'), path = require('node:path');
+const root = path.resolve(__dirname, '..');
+const out = require('./compile.cjs')();
 const {parseYtsheet}=require(path.join(out,'ytsheet/parseYtsheet.js'));
 const {readInventoryEffects}=require(path.join(out,'items/inventoryEffects.js'));
 const {analyzeModifiers,compatible}=require(path.join(out,'calculation/analysis.js'));

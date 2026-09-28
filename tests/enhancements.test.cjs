@@ -1,12 +1,8 @@
-const { test, after } = require('node:test');
+const {test, after} = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const os = require('node:os');
-const path = require('node:path');
-const { execFileSync } = require('node:child_process');
-const root = path.join(__dirname, '..'), out = fs.mkdtempSync(path.join(os.tmpdir(), 'ytsheet-enhance-'));
-after(() => fs.rmSync(out, { recursive: true, force: true }));
-execFileSync(process.execPath, [path.join(root,'node_modules/typescript/bin/tsc'),'--project',path.join(root,'tsconfig.json'),'--noEmit','false','--module','commonjs','--moduleResolution','node','--outDir',out], {cwd:root,stdio:'inherit'});
+const fs = require('node:fs'), path = require('node:path');
+const root = path.resolve(__dirname, '..');
+const out = require('./compile.cjs')();
 const {parseYtsheet} = require(path.join(out,'ytsheet/parseYtsheet.js'));
 const {attackKind,analyzeModifiers,compatible,skillRolls} = require(path.join(out,'calculation/analysis.js'));
 const {prepareCalculationPalette,renderRoll,TrackedPalette} = require(path.join(out,'calculation/palette.js'));
@@ -107,7 +103,7 @@ for(const name of ['ベアアップ','ペアアップ']) test(name+' only affect
  const p=buildPalette(s,{}).text;
  assert.ok(p.includes('回避判定\n({精神判定ダイス}+{判定BD}+{強心丹D}+1)D+{精神判定}>=0 【精神】判定（リアクション）'));
  assert.ok(p.includes('({精神判定ダイス}+{判定BD}+{強心丹D})D+{精神判定}>=0 【精神】判定\n'));
- assert.ok(p.includes('({精神判定ダイス}+{判定BD}+{強心丹D})D+{精神判定}>=0 精神'));
+ assert.ok(p.includes('({精神判定ダイス}+{判定BD}+{強心丹D})D+{精神判定}>=0 【精神】判定'));
  assert.ok(!analyzeModifiers(s).modifiers.some(m=>m.source===name));
 });
 test('no Bear Up means no fixed reaction bonus',()=>assert.ok(!spiritReaction(sheet({})).includes('+1')));

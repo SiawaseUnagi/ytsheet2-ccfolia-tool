@@ -1,18 +1,9 @@
-// Run: node tests/editorValidation.test.cjs
-const { test, after } = require('node:test');
+const {test, after} = require('node:test');
 const assert = require('node:assert/strict');
-const { mkdtempSync, rmSync, existsSync } = require('node:fs');
-const { tmpdir } = require('node:os');
-const path = require('node:path');
-const { execFileSync } = require('node:child_process');
-const root = path.join(__dirname, '..');
-const out = mkdtempSync(path.join(tmpdir(), 'ytsheet-validation-'));
-const local = path.join(root, 'node_modules/typescript/bin/tsc');
-const args = ['--strict', '--target', 'ES2022', '--module', 'commonjs', '--outDir', out, path.join(root, 'src/editor/validation.ts')];
-try { existsSync(local) ? execFileSync(process.execPath, [local, ...args]) : execFileSync('tsc', args); }
-catch (e) { rmSync(out, { recursive: true, force: true }); throw e; }
-after(() => rmSync(out, { recursive: true, force: true }));
-const { validateEditor } = require(path.join(out, 'validation.js'));
+const fs = require('node:fs'), path = require('node:path');
+const root = path.resolve(__dirname, '..');
+const out = require('./compile.cjs')();
+const { validateEditor } = require(path.join(out, 'editor/validation.js'));
 const check = (patch = {}) => validateEditor({ statusEdit: '', paramsEdit: '', palette: '', ...patch });
 const has = (issues, code) => issues.some(i => i.code === code);
 

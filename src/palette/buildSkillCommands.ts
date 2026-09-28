@@ -1,3 +1,5 @@
+import { checkFormula, renderCheck, type CheckFormula } from "./checks";
+import { isToggleSkill, skillFlagName, resourceCommands } from "./skillResources";
 import type { CustomCommandMap, YtSkill } from "../ytsheet/types";
 import { detectUsageLimit } from "./detectUsageLimit";
 
@@ -25,13 +27,15 @@ function timingPhrase(timing: string): string {
   if (/リアクション/.test(t)) return "リアクションで";
   if (/レガシー/.test(t)) return "レガシーアクションで";
   if (/効果参照/.test(t)) return "";
-  if (/判定.*直前|判定.*直後|DR.*直前|DR.*直後|ダメージロール.*直前|ダメージロール.*直後/.test(t)) return `${t}に`;
+  if (/判定.*直前|判定.*直後|DR.*直前|DR.*直後|ダメージロール.*直前|ダメージロール.*直後/.test(t))
+    return `${t}に`;
   return t ? `${t}に` : "";
 }
 
 function extraInfo(skill: YtSkill): string {
   const parts: string[] = [];
-  if (hasText(skill.judge) && !/自動成功|なし/.test(skill.judge)) parts.push(`判定：${skill.judge}`);
+  if (hasText(skill.judge) && !/自動成功|なし/.test(skill.judge))
+    parts.push(`判定：${skill.judge}`);
   if (shouldShowTargetInput(skill)) parts.push(`対象：${skill.target}`);
   if (hasText(skill.range)) parts.push(`射程：${skill.range}`);
   if (hasText(skill.usage)) parts.push(`使用条件：${skill.usage}`);
@@ -44,11 +48,9 @@ function effectText(skill: YtSkill): string {
 }
 
 function passiveLine(skill: YtSkill): string {
-  return `《${skill.name}》${skill.level} /${skill.timing || "―"}/${skill.judge || "―"}/${skill.target || "―"}/${skill.range || "―"}/${displayCost(skill)}/ ${effectText(skill)}`.replace(/\s+/g, " ").trim();
-}
-
-function normalizeNumberText(value: string): string {
-  return value.replace(/,/g, "").replace(/[０-９]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
+  return `《${skill.name}》${skill.level} /${skill.timing || "―"}/${skill.judge || "―"}/${skill.target || "―"}/${skill.range || "―"}/${displayCost(skill)}/ ${effectText(skill)}`
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function shouldShowTargetInput(skill: YtSkill): boolean {
@@ -57,43 +59,11 @@ function shouldShowTargetInput(skill: YtSkill): boolean {
   return !/^(自身|なし|無し|無|―|-)$/.test(target);
 }
 
-function resourceCommands(skill: YtSkill): string[] {
-  const lines: string[] = [];
-  const cost = Number(skill.cost);
-  if (Number.isFinite(cost) && cost > 0) lines.push(`:MP-${cost}`);
-
-  const allText = `${skill.usage} ${skill.effect}`;
-  const ep = allText.match(/EPを\s*(\d+)\s*点消費/);
-  if (ep) lines.push(`:EP-${ep[1]}`);
-
-  const exactFate = allText.match(/フェイトを\s*(\d+)\s*点消費/);
-  if (exactFate) lines.push(`:フェイト-${exactFate[1]}`);
-  else if (/フェイト.*消費/.test(allText)) lines.push(":フェイト-1");
-
-  const hp = normalizeNumberText(allText).match(/(?:【?HP】?|ＨＰ)を\s*(\d+)\s*点?消費/);
-  if (hp) lines.push(`:HP-${hp[1]}`);
-
-  const gold = normalizeNumberText(allText).match(/(?:所持金を\s*)?(\d+)\s*G\s*消費/);
-  if (gold) lines.push(`:所持金-${gold[1]}`);
-  return lines;
-}
-
 function judgementCommand(skill: YtSkill): string | null {
   const judge = skill.judge.trim();
-  if (!hasText(judge) || /自動成功|なし|―|-/.test(judge)) return null;
-  if (/魔術/.test(judge)) return "({魔術判定ダイス}+{判定BD}+{命中BD})D+{魔術判定}>=0 魔術判定";
-  if (/呪歌/.test(judge)) return "({呪歌判定ダイス}+{判定BD})D+{呪歌判定}>=0 呪歌判定";
-  if (/錬金術/.test(judge)) return "({錬金術判定ダイス}+{判定BD})D+{錬金術判定}>=0 錬金術判定";
-  if (/命中/.test(judge)) return "({命中ダイス}+{判定BD}+{命中BD})D+{命中}>=0 命中判定";
-  if (/回避/.test(judge)) return "({回避ダイス}+{判定BD}+{回避BD})D+{回避}>=0 回避判定";
-  const ability = judge.match(/(筋力|器用|敏捷|知力|感知|精神|幸運)/)?.[1];
-  if (ability) return `({${ability}判定ダイス}+{判定BD})D+{${ability}判定}>=0 ${judge}`;
-  return `2D>=0 ${judge}`;
-}
-
-function isToggleSkill(skill: YtSkill): boolean {
-  const text = `${skill.timing} ${skill.effect}`;
-  return /シーン終了まで持続|メインプロセス終了まで持続|ラウンド終了まで持続|影響がある場所にいる間|効果を受ける場所/.test(text);
+  if (!hasText(judge) || /^(?:自動成功|なし|―|-)$/u.test(judge)) return null;
+  const check = checkFormula(judge);
+  return check ? renderCheck(check) : `2D>=0 ${judge}`;
 }
 
 function shouldResetHere(skill: YtSkill): boolean {
@@ -104,12 +74,16 @@ export function skillToLines(skill: YtSkill, custom: CustomCommandMap) {
   const lines: string[] = [];
   const resets: { scope: "scene" | "scenario"; line: string }[] = [];
   const c = custom[skill.name];
+  let check: CheckFormula | undefined;
+  let checkIndex = -1,
+    effectsAfter = -1;
   const isPassive = /パッシブ/.test(skill.timing);
   const body = effectText(skill);
+  const flag = skillFlagName(skill);
 
   if (isPassive) {
     lines.push(passiveLine(skill));
-    if (isToggleSkill(skill)) lines.push(`:${skill.name}=1`, `:${skill.name}=0`);
+    if (isToggleSkill(skill)) lines.push(`:${flag}=1`, `:${flag}=0`);
   } else {
     const prefix = timingPhrase(skill.timing);
     lines.push(`${prefix}《${skill.name}》${skill.level}を使用。${body}`.trim());
@@ -117,11 +91,17 @@ export function skillToLines(skill: YtSkill, custom: CustomCommandMap) {
     else lines.push(...resourceCommands(skill));
     if (shouldShowTargetInput(skill)) lines.push("対象：");
     const judge = judgementCommand(skill);
-    if (judge) lines.push(judge);
+    if (judge) {
+      checkIndex = lines.length;
+      check = checkFormula(skill.judge);
+      lines.push(judge);
+    }
+    effectsAfter = lines.length - 1;
     if (isToggleSkill(skill)) {
-      lines.push(`:${skill.name}=1`);
-      if (shouldResetHere(skill)) lines.push(`:${skill.name}=0`);
-      else if (/シーン終了まで持続/.test(skill.effect)) resets.push({ scope: "scene", line: `:${skill.name}=0` });
+      lines.push(`:${flag}=1`);
+      if (shouldResetHere(skill)) lines.push(`:${flag}=0`);
+      else if (/シーン終了まで持続/.test(skill.effect))
+        resets.push({ scope: "scene", line: `:${flag}=0` });
     }
   }
 
@@ -131,5 +111,5 @@ export function skillToLines(skill: YtSkill, custom: CustomCommandMap) {
     resets.push({ scope: lim.scope, line: `:${skill.name}=${lim.max}` });
   }
   if (c?.reset?.length) resets.push(...c.reset.map((line) => ({ scope: "scene" as const, line })));
-  return { lines, resets, usageLimit: lim };
+  return { lines, resets, usageLimit: lim, check, checkIndex, effectsAfter };
 }

@@ -1,11 +1,8 @@
-const { test, after } = require('node:test');
+const {test, after} = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs'), path = require('node:path'), os = require('node:os');
-const { execFileSync } = require('node:child_process');
+const fs = require('node:fs'), path = require('node:path');
 const root = path.resolve(__dirname, '..');
-const out = fs.mkdtempSync(path.join(os.tmpdir(), 'ytsheet-ability-labels-'));
-after(() => fs.rmSync(out, { recursive: true, force: true }));
-execFileSync(process.execPath, [path.join(root, 'node_modules/typescript/bin/tsc'), '--project', path.join(root, 'tsconfig.json'), '--noEmit', 'false', '--module', 'commonjs', '--moduleResolution', 'node', '--outDir', out], { cwd: root, stdio: 'inherit' });
+const out = require('./compile.cjs')();
 const load = p => require(path.join(out, p + '.js'));
 const { parseYtsheet } = load('ytsheet/parseYtsheet');
 const { buildPalette } = load('output/enhancements');
@@ -75,7 +72,7 @@ test('reaction qualifier and non-check effect names are preserved', () => {
   assert.equal(renderRoll({ ...target, kind: 'effect', base: { dice: '2', fixed: '0' }, suffix: '精神' }), '2D 精神');
 });
 test('page title has no version suffix', () => {
-  const source = fs.readFileSync(path.join(root, 'src/main.ts'), 'utf8');
+  const source = fs.readFileSync(path.join(root, 'src/editor/view.ts'), 'utf8');
   assert.ok(source.includes('<h1>ゆとシートⅡ→ココフォリア変換</h1>'));
   assert.ok(!source.includes('v0.1'));
 });

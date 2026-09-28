@@ -30,20 +30,22 @@ function isWeaponLike(type: string): boolean {
 function parseSkills(raw: Record<string, unknown>): YtSkill[] {
   const table = raw.skill as unknown[] | undefined;
   if (Array.isArray(table)) {
-    return table.map((s) => {
-      const o = (s ?? {}) as Record<string, unknown>;
-      return {
-        name: normalizeText(String(o.name ?? "")),
-        level: safeNumber(o.lv, 1),
-        timing: normalizeText(String(o.timing ?? "")),
-        judge: normalizeText(String(o.judge ?? "")),
-        target: normalizeText(String(o.target ?? "")),
-        range: normalizeText(String(o.range ?? "")),
-        cost: normalizeText(String(o.cost ?? "")),
-        usage: normalizeText(String(o.usage ?? "")),
-        effect: normalizeText(String(o.effect ?? "")),
-      };
-    }).filter((s) => s.name);
+    return table
+      .map((s) => {
+        const o = (s ?? {}) as Record<string, unknown>;
+        return {
+          name: normalizeText(String(o.name ?? "")),
+          level: safeNumber(o.lv, 1),
+          timing: normalizeText(String(o.timing ?? "")),
+          judge: normalizeText(String(o.judge ?? "")),
+          target: normalizeText(String(o.target ?? "")),
+          range: normalizeText(String(o.range ?? "")),
+          cost: normalizeText(String(o.cost ?? "")),
+          usage: normalizeText(String(o.usage ?? "")),
+          effect: normalizeText(String(o.effect ?? "")),
+        };
+      })
+      .filter((s) => s.name);
   }
 
   const count = pick(raw, ["skillNum"], 0);
@@ -69,40 +71,58 @@ function parseSkills(raw: Record<string, unknown>): YtSkill[] {
 function parseWeapons(raw: Record<string, unknown>): WeaponData[] {
   const items = raw.weapon as unknown[] | undefined;
   if (Array.isArray(items)) {
-    return items.map((w) => {
-      const o = (w ?? {}) as Record<string, unknown>;
-      return {
-        name: normalizeText(String(o.name ?? "")),
-        hit: safeNumber(o.hit, 0),
-        hitDice: safeNumber(o.hitDice, 2),
-        atk: safeNumber(o.atk, 0),
-        atkDice: safeNumber(o.atkDice, 2),
-        weaponAtk: safeNumber(o.weaponAtk ?? o.attack ?? o.atk, 0),
-      };
-    }).filter((w) => w.name && isWeaponLike(normalizeText(String((items.find((x) => (x as Record<string, unknown>).name === w.name) as Record<string, unknown> | undefined)?.type ?? ""))));
+    return items
+      .map((w) => {
+        const o = (w ?? {}) as Record<string, unknown>;
+        return {
+          name: normalizeText(String(o.name ?? "")),
+          hit: safeNumber(o.hit, 0),
+          hitDice: safeNumber(o.hitDice, 2),
+          atk: safeNumber(o.atk, 0),
+          atkDice: safeNumber(o.atkDice, 2),
+          weaponAtk: safeNumber(o.weaponAtk ?? o.attack ?? o.atk, 0),
+        };
+      })
+      .filter(
+        (w) =>
+          w.name &&
+          isWeaponLike(
+            normalizeText(
+              String(
+                (
+                  items.find((x) => (x as Record<string, unknown>).name === w.name) as
+                    | Record<string, unknown>
+                    | undefined
+                )?.type ?? "",
+              ),
+            ),
+          ),
+      );
   }
 
   const weapons: WeaponData[] = [];
   const right = getText(raw, "armamentHandRName");
   const rightType = getText(raw, "armamentHandRType");
-  if (right && isWeaponLike(rightType)) weapons.push({
-    name: right,
-    hit: pick(raw, ["battleTotalAccR", "battleTotalAcc"], 0),
-    hitDice: pick(raw, ["battleDiceAcc"], 2),
-    atk: pick(raw, ["battleTotalAtkR", "battleTotalAtk"], 0),
-    atkDice: pick(raw, ["battleDiceAtk"], 2),
-    weaponAtk: pick(raw, ["armamentHandRAtk", "weaponAtkR", "handRAtk"], 0),
-  });
+  if (right && isWeaponLike(rightType))
+    weapons.push({
+      name: right,
+      hit: pick(raw, ["battleTotalAccR", "battleTotalAcc"], 0),
+      hitDice: pick(raw, ["battleDiceAcc"], 2),
+      atk: pick(raw, ["battleTotalAtkR", "battleTotalAtk"], 0),
+      atkDice: pick(raw, ["battleDiceAtk"], 2),
+      weaponAtk: pick(raw, ["armamentHandRAtk", "weaponAtkR", "handRAtk"], 0),
+    });
   const left = getText(raw, "armamentHandLName");
   const leftType = getText(raw, "armamentHandLType");
-  if (left && isWeaponLike(leftType)) weapons.push({
-    name: left,
-    hit: pick(raw, ["battleTotalAccL", "battleTotalAcc"], 0),
-    hitDice: pick(raw, ["battleDiceAcc"], 2),
-    atk: pick(raw, ["battleTotalAtkL", "battleTotalAtk"], 0),
-    atkDice: pick(raw, ["battleDiceAtk"], 2),
-    weaponAtk: pick(raw, ["armamentHandLAtk", "weaponAtkL", "handLAtk"], 0),
-  });
+  if (left && isWeaponLike(leftType))
+    weapons.push({
+      name: left,
+      hit: pick(raw, ["battleTotalAccL", "battleTotalAcc"], 0),
+      hitDice: pick(raw, ["battleDiceAcc"], 2),
+      atk: pick(raw, ["battleTotalAtkL", "battleTotalAtk"], 0),
+      atkDice: pick(raw, ["battleDiceAtk"], 2),
+      weaponAtk: pick(raw, ["armamentHandLAtk", "weaponAtkL", "handLAtk"], 0),
+    });
   return weapons;
 }
 
@@ -113,7 +133,7 @@ export function parseYtsheet(raw: Record<string, unknown>, baseUrl: string): Par
   const actionValue = pick(raw, ["battleTotalIni", "initiative", "行動値"], 0);
   const parsed: ParsedSheet = {
     raw,
-    name: String(raw.characterName ?? raw.pcName ?? "(名称不明)"),
+    name: normalizeText(String(raw.characterName ?? raw.pcName ?? "(名称不明)")),
     baseUrl,
     hp: pick(raw, ["hpTotal", "maxHp", "hp"], 0),
     mp: pick(raw, ["mpTotal", "maxMp", "mp"], 0),

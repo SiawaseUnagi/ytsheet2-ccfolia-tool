@@ -1,10 +1,4 @@
-function clean(value: unknown): string {
-  return String(value ?? "")
-    .replace(/&lt;br&gt;/g, " ")
-    .replace(/<br\s*\/?>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
+import { singleLineText as clean } from "../utils/normalizeText";
 
 function pick(raw: Record<string, unknown>, keys: string[]): string {
   for (const key of keys) {

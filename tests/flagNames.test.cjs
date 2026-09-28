@@ -1,17 +1,8 @@
-// node tests/flagNames.test.cjs (no extra test dependencies)
-const { test, after } = require('node:test');
+const {test, after} = require('node:test');
 const assert = require('node:assert/strict');
-const { mkdtempSync, rmSync, existsSync } = require('node:fs');
-const { tmpdir } = require('node:os');
-const path = require('node:path');
-const { execFileSync } = require('node:child_process');
-const root = path.join(__dirname, '..');
-const out = mkdtempSync(path.join(tmpdir(), 'ytsheet-flag-names-'));
-const args = ['src/calculation/ui.ts', '--target', 'ES2022', '--module', 'commonjs', '--moduleResolution', 'node', '--lib', 'ES2022,DOM', '--strict', '--outDir', out];
-const tsc = path.join(root, 'node_modules/typescript/bin/tsc');
-try { existsSync(tsc) ? execFileSync(process.execPath, [tsc, ...args], { cwd: root }) : execFileSync('tsc', args, { cwd: root }); }
-catch (error) { rmSync(out, { recursive: true, force: true }); throw error; }
-after(() => rmSync(out, { recursive: true, force: true }));
+const fs = require('node:fs'), path = require('node:path');
+const root = path.resolve(__dirname, '..');
+const out = require('./compile.cjs')();
 const { validateFlagName, replaceFlagReferences, replaceStatusLabel, checkFlagRename } = require(path.join(out, 'calculation/flagNames.js'));
 const { renderRoll, TrackedPalette } = require(path.join(out, 'calculation/palette.js'));
 const { mountCalculationEditor } = require(path.join(out, 'calculation/ui.js'));

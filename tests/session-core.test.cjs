@@ -1,15 +1,8 @@
-const { test, after } = require('node:test');
+const {test, after} = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const { execFileSync } = require('node:child_process');
-const root = path.join(__dirname, '..');
-const out = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'ytsheet-session-'));
-const tsc = path.join(root, 'node_modules/typescript/bin/tsc');
-const flags = ['--project', path.join(root, 'tsconfig.json'), '--noEmit', 'false', '--module', 'commonjs', '--moduleResolution', 'node', '--outDir', out];
-try { fs.existsSync(tsc) ? execFileSync(process.execPath, [tsc, ...flags], {cwd: root, stdio: 'pipe'}) : execFileSync('tsc', flags, {cwd: root, stdio: 'pipe'}); }
-catch(e) { console.error(String(e.stdout)); fs.rmSync(out, { recursive:true, force:true }); throw e; }
-after(() => fs.rmSync(out, { recursive:true, force:true }));
+const fs = require('node:fs'), path = require('node:path');
+const root = path.resolve(__dirname, '..');
+const out = require('./compile.cjs')();
 const { mergeText, mergeRows, mergeMetadata } = require(path.join(out,'session/merge.js'));
 const { BrowserSaves, fileFor, parseSaveFile, sheetKey, SAVE_PREFIX } = require(path.join(out,'session/model.js'));
 

@@ -1,10 +1,8 @@
-const { test, after } = require('node:test');
+const {test, after} = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs'), path = require('node:path'), os = require('node:os');
-const { execFileSync } = require('node:child_process');
-const root = path.resolve(__dirname, '..'), out = fs.mkdtempSync(path.join(os.tmpdir(), 'ytsheet-check-flags-'));
-after(() => fs.rmSync(out, { recursive: true, force: true }));
-execFileSync(process.execPath, [path.join(root, 'node_modules/typescript/bin/tsc'), '--project', path.join(root, 'tsconfig.json'), '--noEmit', 'false', '--module', 'commonjs', '--moduleResolution', 'node', '--outDir', out], { cwd: root, stdio: 'inherit' });
+const fs = require('node:fs'), path = require('node:path');
+const root = path.resolve(__dirname, '..');
+const out = require('./compile.cjs')();
 const load = p => require(path.join(out, p + '.js'));
 const { parseYtsheet } = load('ytsheet/parseYtsheet');
 const { buildPalette, buildStatus } = load('output/enhancements');

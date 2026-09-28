@@ -1,13 +1,9 @@
 const {test, after} = require('node:test');
 const assert = require('node:assert/strict');
-const fs=require('node:fs'),path=require('node:path'),os=require('node:os');
-const {execFileSync}=require('node:child_process');
-const out=fs.mkdtempSync(path.join(os.tmpdir(),'ytsheet-mode-'));
-after(()=>fs.rmSync(out,{recursive:true,force:true}));
-const root=path.join(__dirname,'..'), local=path.join(root,'node_modules/typescript/bin/tsc');
-const args=[path.join(root,'src/editor/parameterMode.ts'),'--target','ES2022','--module','commonjs','--strict','--outDir',out];
-fs.existsSync(local)?execFileSync(process.execPath,[local,...args]):execFileSync('tsc',args);
-const {switchParameterMode}=require(path.join(out,'parameterMode.js'));
+const fs = require('node:fs'), path = require('node:path');
+const root = path.resolve(__dirname, '..');
+const out = require('./compile.cjs')();
+const {switchParameterMode}=require(path.join(out,'editor/parameterMode.js'));
 const formula=[{label:'器用',value:'6'},{label:'器用判定',value:'{器用}+1'},{label:'命中',value:'{器用判定}-1'},{label:'命中ダイス',value:'3'}];
 const fixed=formula.map((p,i)=>({...p,value:['6','7','6','3'][i]}));
 const text=p=>p.map(x=>`${x.label}\t${x.value}`).join('\n');

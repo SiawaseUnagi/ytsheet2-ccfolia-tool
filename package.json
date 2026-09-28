@@ -5,11 +5,21 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
+    "build": "node scripts/build-info.cjs && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "node scripts/test.cjs",
+    "test:browser": "node scripts/browser.cjs",
+    "check": "npm run typecheck && npm test && npm run build",
+    "format": "prettier --write \"src/**/*.ts\" \"scripts/*.cjs\" \"tests/*.cjs\""
   },
   "devDependencies": {
-    "typescript": "^5.6.3",
-    "vite": "^5.4.10"
+    "playwright": "1.58.2",
+    "typescript": "5.9.3",
+    "vite": "7.3.6",
+    "prettier": "3.6.2"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   }
 }
