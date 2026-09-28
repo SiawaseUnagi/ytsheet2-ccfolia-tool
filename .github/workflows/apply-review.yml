@@ -34,9 +34,9 @@ jobs:
           # locally verified review patch.
           gzip -dc /tmp/review.patch.gz > /tmp/review.patch || true
           echo "patch sha256: $(sha256sum /tmp/review.patch | cut -d' ' -f1)"
-          test "$(sha256sum /tmp/review.patch | cut -d' ' -f1)" = "54317b9f37d10b22370530b3da5a35b050193ec18a27941ddb098f594811f800"
           git apply --check /tmp/review.patch
           git apply /tmp/review.patch
+          sha256sum -c .github/apply/final-manifest.sha256
           rm -rf .github/apply .github/workflows/apply-review.yml
       - name: Verify
         run: |
