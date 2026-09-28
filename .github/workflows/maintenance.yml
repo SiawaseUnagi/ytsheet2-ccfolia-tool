@@ -1,0 +1,24 @@
+name: Maintenance verification
+on:
+  push:
+    branches: [maintenance/review-fixes]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: maintenance-source
+          path: |
+            src/
+            tests/
+            index.html
+            package.json
+            package-lock.json
+            tsconfig.json
+            vite.config.ts
+          retention-days: 7
