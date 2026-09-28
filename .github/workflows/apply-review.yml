@@ -29,9 +29,10 @@ jobs:
           fi
           base64 -d /tmp/review.patch.b64 > /tmp/review.patch.gz
           echo "gzip sha256: $(sha256sum /tmp/review.patch.gz | cut -d' ' -f1)"
-          test "$(sha256sum /tmp/review.patch.gz | cut -d' ' -f1)" = "694c6c51eafb046de4c117d35f532790c16f1d1872cf7cfb37b39d395ca735be"
           gzip -t /tmp/review.patch.gz
           gzip -dc /tmp/review.patch.gz > /tmp/review.patch
+          echo "patch sha256: $(sha256sum /tmp/review.patch | cut -d' ' -f1)"
+          test "$(sha256sum /tmp/review.patch | cut -d' ' -f1)" = "54317b9f37d10b22370530b3da5a35b050193ec18a27941ddb098f594811f800"
           git apply --check /tmp/review.patch
           git apply /tmp/review.patch
           rm -rf .github/apply .github/workflows/apply-review.yml
