@@ -43,6 +43,7 @@ const raw={id:'autotest',characterName:'画面テスト',sheetURL:'https://yutor
   await bulkMode.selectOption('toggle');assert.equal(await allChecks.isChecked(),false);
   const bulkEffect=bulkPanel.locator('details[data-modifier-effect]');
   assert.equal(await bulkEffect.locator(':scope > summary').innerText(),'スキルの効果を確認');
+  await bulkEffect.locator(':scope > summary').click();
   assert.match(await bulkEffect.innerText(),/あらゆる判定に\+1D/);
   const bulkRename=bulkPanel.locator('details[data-flag-editor]');
   await bulkRename.locator(':scope > summary').click();
