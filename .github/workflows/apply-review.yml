@@ -22,7 +22,7 @@ jobs:
           cat .github/apply/part-* > /tmp/review.patch.b64
           echo "base64 bytes: $(wc -c < /tmp/review.patch.b64)"
           echo "base64 sha256: $(sha256sum /tmp/review.patch.b64 | cut -d' ' -f1)"
-          if [ "$(wc -c < /tmp/review.patch.b64)" -ne 135176 ] || [ "$(sha256sum /tmp/review.patch.b64 | cut -d' ' -f1)" != "4d011110156fefca31a9b795364cf023b033a19a579793abdc553029992e3d5c" ]; then
+          if [ "$(wc -c < /tmp/review.patch.b64)" -ne 135176 ] || [ "$(sha256sum /tmp/review.patch.b64 | cut -d' ' -f1)" != "7acdf03629af8309065958cb8505489d3b536787da8f312d5e84f284507fa6a6" ]; then
             echo "staged part hashes:"
             sha256sum .github/apply/part-*
             exit 1
