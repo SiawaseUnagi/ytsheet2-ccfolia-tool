@@ -16,12 +16,11 @@ jobs:
         with:
           node-version: 24
           package-manager-cache: false
-      - name: Resolve supported toolchain for maintenance tests
+      - name: Resolve maintenance toolchain
         run: |
-          npm install --save-exact --save-dev vite@7.3 typescript@5.9.3 playwright@1.58.2
+          npm install --save-exact --save-dev vite@7.3.6 typescript@5.9.3 playwright@1.58.2 prettier@3.6.2
           mkdir -p validation-artifacts
           tar -czf validation-artifacts/dependencies.tar.gz node_modules package.json package-lock.json
-          git archive --format=tar 8083af2 src | gzip > validation-artifacts/legacy-source.tar.gz
           npm audit --json > validation-artifacts/npm-audit.json || true
       - uses: actions/upload-artifact@v4
         with:
