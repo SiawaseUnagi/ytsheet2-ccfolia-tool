@@ -1,4 +1,5 @@
-import { mountBulkCheckControls, type CheckChoiceControl } from "./bulkChecks";
+import { mountModifierSettings } from "./modifierSettings";
+import { mountBulkCheckControls, setAllCheckModes, type CheckChoiceControl } from "./bulkChecks";
 import { groupCalculationTargets } from "./groups";
 import { compatible, type Modifier, type RollTarget } from "./analysis";
 import { renderRoll, TrackedPalette, type PreparedPalette, type Selection } from "./palette";
@@ -14,7 +15,7 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, text = ""): HTMLEleme
 function describe(modifier: Modifier): string {
   const p: string[] = [];
   if (modifier.amount.dice !== "0") p.push(`ダイス ${modifier.amount.dice}`);
-  if (modifier.amount.fixed !== "0") p.push(`固定値 ${modifier.amount.fixed}`);
+  if (modifier.amount.fixed !== "0") p.push(`固定値 ${modifier.fixedExpression ?? modifier.amount.fixed}`);
   const origin = modifier.origin === "inventory" ? "（アイテム）" : modifier.level === undefined ? "（装備）" : `（スキルレベル${modifier.level}）`;
   return `${modifier.source}${origin}：${p.join(" / ")}`;
 }
@@ -36,6 +37,21 @@ export function mountCalculationEditor(host: HTMLElement, prepared: PreparedPale
   host.append(el("h3", "式に加える補正"));
   const checkControls: CheckChoiceControl[] = [];
   let refreshBulkControls: () => void = () => {};
+  const renameModifierFlag = (modifier: Modifier, requested: string): string => {
+    const binding = bindings.get(modifier.flag)!;
+    const next = validateFlagName(requested), previous = binding.actual ?? binding.name;
+    for (const [key, other] of bindings)
+      if (key !== modifier.flag && (other.actual ?? other.name) === next)
+        throw new Error(`「${next}」は別の補正で使われています。別の名前にしてください。`);
+    tracker.observe(palette.value);
+    const actual = hooks.renameFlag(previous, next); tracker.renameFlag(previous, actual);
+    binding.name = actual; if (binding.actual) binding.actual = actual;
+    const affected = views.filter(view => view.key === modifier.flag);
+    for (const fn of new Set(affected.filter(view => view.active()).map(view => view.rebuild))) fn();
+    for (const view of affected) view.refresh(true);
+    refreshBulkControls(); hooks.changed();
+    return actual;
+  };
   const groups: { name: string; matches: (t: RollTarget) => boolean }[] = [
     { name: "回復量", matches: t => ["hpHeal", "mpHeal"].includes(t.kind) },
     { name: "スキルの効果", matches: t => ["hpSet", "effect"].includes(t.kind) },
@@ -94,7 +110,6 @@ export function mountCalculationEditor(host: HTMLElement, prepared: PreparedPale
           return { target: tk, modifier: mk, checked: saved?.checked ?? false, toggle: saved?.toggle ?? modifier.conditional };
         });
         snapshots.push(...memberStates); states.set(modifier.id, memberStates);
-        const state = memberStates[0];
         const binding = bindings.get(modifier.flag)!;
         const box = el("div"); box.style.cssText = "margin:12px 0";
         const label = el("label"); label.style.cssText = "display:flex;gap:8px;align-items:flex-start;padding:6px 0";
@@ -102,63 +117,37 @@ export function mountCalculationEditor(host: HTMLElement, prepared: PreparedPale
         checkbox.indeterminate = memberStates.some(s => s.checked) && !checkbox.checked;
         checkbox.dataset.modifierId = modifier.id; checkbox.setAttribute("aria-label", `${title}：${modifier.source}`);
         label.append(checkbox, el("span", describe(modifier))); box.append(label);
-        const modeLabel = el("label", "加算方法："), mode = el("select"); mode.setAttribute("aria-label", `${modifier.source}の加算方法`);
-        for (const [value, caption] of [["constant", "常時加算"], ["toggle", "フラグ管理"]]) { const option = el("option", caption); option.value = value; mode.append(option); }
-        const mixedMode = memberStates.some(s => s.toggle !== state.toggle);
-        if (mixedMode) { const option = el("option", "保存時の指定が混在"); option.value = "mixed"; mode.append(option); }
-        mode.value = mixedMode ? "mixed" : state.toggle ? "toggle" : "constant";
-        modeLabel.append(mode); box.append(modeLabel);
         const mixed = el("p"); mixed.style.cssText = "margin:4px 0;font-size:0.9em"; box.append(mixed);
-        const flagHelp = el("p"); flagHelp.style.cssText = "margin:4px 0;font-size:0.9em";
-        const rename = el("details"); rename.dataset.flagEditor = modifier.id; rename.append(el("summary", "変数名を変更"));
-        const nameLabel = el("label", "補正用の変数名："), nameInput = el("input"); nameInput.type = "text"; nameInput.value = binding.actual ?? binding.name;
-        nameInput.placeholder = "例：WB"; nameInput.maxLength = 80; nameInput.autocomplete = "off"; nameInput.spellcheck = false;
-        nameInput.style.cssText = "width:100%;max-width:24em;box-sizing:border-box;font-size:16px;margin:4px 0";
-        nameInput.setAttribute("aria-label", `${modifier.source}の補正用変数名`); nameLabel.append(nameInput); rename.append(nameLabel);
-        const applyName = el("button", "名前を適用"); applyName.type = "button";
-        rename.append(applyName);
-        const renameMessage = el("p"); renameMessage.setAttribute("aria-live", "polite"); rename.append(renameMessage);
+        const settings = mountModifierSettings({
+          modifier,
+          getModes: () => memberStates.map(s => s.toggle),
+          getFlagName: () => binding.actual ?? binding.name,
+          setMode: toggle => {
+            memberStates.forEach(s => { s.toggle = toggle; });
+            if (memberStates.some(s => s.checked)) rebuild(); else { refreshBulkControls(); hooks.changed(); }
+            updateFlagHelp();
+          },
+          renameFlag: requested => renameModifierFlag(modifier, requested),
+        });
         const updateFlagHelp = (force = false) => {
-          const name = binding.actual ?? binding.name;
-          const toggled = memberStates.some(s => s.toggle);
-          flagHelp.textContent = toggled ? `:${name}=1 / :${name}=0` : "";
+          settings.refresh(force);
           mixed.textContent = memberStates.some(s => s.checked !== memberStates[0].checked || s.toggle !== memberStates[0].toggle)
-            ? "保存時の指定が混在しています。変更した補正から共通の設定になります。" : "";
-          rename.hidden = !toggled; if (force || !rename.open) nameInput.value = name;
+            ? "個別の指定が混在しています。変更した補正から共通の設定になります。" : "";
         };
-        const applyRename = () => {
-          try {
-            const next = validateFlagName(nameInput.value.trim() || modifier.flag), previous = binding.actual ?? binding.name;
-            for (const [key, other] of bindings) if (key !== modifier.flag && (other.actual ?? other.name) === next) throw new Error(`「${next}」は別の補正で使われています。別の名前にしてください。`);
-            tracker.observe(palette.value); const actual = hooks.renameFlag(previous, next); tracker.renameFlag(previous, actual);
-            binding.name = actual; if (binding.actual) binding.actual = actual;
-            const affected = views.filter(view => view.key === modifier.flag);
-            for (const fn of new Set(affected.filter(view => view.active()).map(view => view.rebuild))) fn();
-            for (const view of affected) view.refresh(true); nameInput.value = actual;
-            renameMessage.textContent = `変数名を「${actual}」にしました。最後に「ココフォリアJSONをコピー」を押してください。`; hooks.changed();
-          } catch (error) { renameMessage.textContent = error instanceof Error ? error.message : "変数名を変更できませんでした。"; }
-        };
-        applyName.onclick = applyRename;
-        nameInput.onkeydown = event => { if (event.key === "Enter" && !event.isComposing) { event.preventDefault(); applyRename(); } };
         views.push({ key: modifier.flag, refresh: updateFlagHelp, rebuild, active: () => memberStates.some(s => s.checked && s.toggle) });
-        updateFlagHelp(); box.append(flagHelp, rename);
+        updateFlagHelp(); box.append(settings.element);
         if (target.attack === "weapon" && (modifier.attack === "melee" || modifier.attack === "ranged")) box.append(el("p", `${modifier.attack === "melee" ? "白兵" : "射撃"}攻撃専用です。この式を使う武器に適用できるか確認してください。`));
-        const source = el("details"); source.append(el("summary", "元の効果文・条件を確認する"), el("p", modifier.effect)); box.append(source);
         if (target.kind === "check") checkControls.push({
           modifier, states: memberStates, rebuild,
           setChecked: checked => {
             memberStates.forEach(s => { s.checked = checked; });
             checkbox.checked = checked; checkbox.indeterminate = false; updateFlagHelp();
           },
+          setMode: toggle => { memberStates.forEach(s => { s.toggle = toggle; }); updateFlagHelp(); },
         });
         checkbox.onchange = () => {
           memberStates.forEach(s => { s.checked = checkbox.checked; }); checkbox.indeterminate = false;
           rebuild(); updateFlagHelp();
-        };
-        mode.onchange = () => {
-          if (mode.value === "mixed") return;
-          memberStates.forEach(s => { s.toggle = mode.value === "toggle"; });
-          if (memberStates.some(s => s.checked)) rebuild(); else hooks.changed(); updateFlagHelp();
         };
         card.append(box);
       }
@@ -170,7 +159,19 @@ export function mountCalculationEditor(host: HTMLElement, prepared: PreparedPale
       };
       card.append(preview, copy, message); outer.append(card);
     }
-    if (group.name === "判定") refreshBulkControls = mountBulkCheckControls(outer, checkControls);
+    if (group.name === "判定") refreshBulkControls = mountBulkCheckControls(outer, checkControls, (modifier, controls) => {
+      const binding = bindings.get(modifier.flag)!;
+      const settings = mountModifierSettings({
+        modifier, scope: "全判定：",
+        getModes: () => controls.flatMap(control => control.states.map(state => state.toggle)),
+        getFlagName: () => binding.actual ?? binding.name,
+        setMode: toggle => { setAllCheckModes(controls, toggle); refreshBulkControls(); hooks.changed(); },
+        renameFlag: requested => renameModifierFlag(modifier, requested),
+      });
+      // A bulk control shares the alias but does not own additional saved choices.
+      views.push({ key: modifier.flag, refresh: settings.refresh, rebuild: () => {}, active: () => false });
+      return settings;
+    });
     host.append(outer);
   }
   if (prepared.reviews.length) {

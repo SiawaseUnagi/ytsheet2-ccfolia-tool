@@ -11,7 +11,7 @@ export function advanceCalculationBaseline(base: Fields, before: Fields, next: F
   };
 }
 
-export const GENERATOR_VERSION = "2026-09-maintenance-1";
+export const GENERATOR_VERSION = "2026-09-reaction-bulk-2";
 export function baselineNotice(version?: string): string[] {
   return version === GENERATOR_VERSION
     ? []

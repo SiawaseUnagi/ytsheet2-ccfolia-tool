@@ -63,19 +63,19 @@ test('ambiguous names remain review items instead of being applied to all checks
 });
 test('evasion companion appears directly below both common evasion checks', () => {
   const s = make({ skill: [dodge] }), p = prepareCalculationPalette(s, buildPalette(s, {}).text);
-  for (const name of ['リソース操作', '判定']) assert.match(section(p.text, name), />=0 回避判定\n回避判定と同時に《ドッジムーブ》2を使用。/);
+  for (const name of ['リアクション', '判定']) assert.match(section(p.text, name), />=0 回避判定\n回避判定と同時に《ドッジムーブ》2を使用。/);
   assert.equal(count(p.text, '《ドッジムーブ》2を使用。'), 2);
   assert.ok(!section(p.text, '効果参照').includes('ドッジムーブ'));
   assert.equal(count(section(p.text, 'シーン終了時リセット'), ':ドッジムーブ=2'), 1);
   assert.equal(buildStatus(s, {}).filter(s => s.label === 'ドッジムーブ').length, 1);
-  const resources = section(p.text, 'リソース操作');
+  const resources = section(p.text, 'リアクション');
   assert.ok(resources.indexOf('ドッジムーブ') < resources.indexOf('【精神】判定（リアクション）'));
   assert.ok(p.modifiers.find(m => m.source === 'ドッジムーブ' && m.judge === '回避'));
 });
 test('paired child follows evasion companion without losing resets', () => {
   const child = skill('同時使用試験', '《ドッジムーブ》と同時に使用する。', '《ドッジムーブ》', 1, '自動成功', '1', 'シナリオ1回');
   const p = prepare({ skill: [child, dodge] }).text;
-  for (const name of ['リソース操作', '判定']) {
+  for (const name of ['リアクション', '判定']) {
     const s = section(p, name); assert.ok(s.indexOf('《ドッジムーブ》2を使用。') < s.indexOf('《同時使用試験》1を使用。'));
   }
   assert.equal(count(section(p, 'シナリオ終了時リセット'), ':同時使用試験=1'), 1);
@@ -86,7 +86,7 @@ for (const effect of ['回避判定に+1Dする。', '回避判定と同時に�
 test('passive evasion bonus stays passive', () => {
   const p = prepare({ skill: [skill('回避パッシブ試験', '回避判定に+1Dする。')] });
   assert.ok(section(p.text, 'パッシブ').includes('回避パッシブ試験'));
-  assert.ok(!section(p.text, 'リソース操作').includes('回避パッシブ試験'));
+  assert.ok(!section(p.text, 'リアクション').includes('回避パッシブ試験'));
 });
 const modifier = (source = '試験', level = 1) => ({ id: 'm', source, level, effect: '', amount: { dice: '1', fixed: '0' }, kinds: ['check'], flag: source, conditional: true, condition: '' });
 function track(text, formula = '2D>=0 判定') {
@@ -162,7 +162,7 @@ test('selected evasion flag regenerates consistently through base/save data', ()
   const b = generateSessionBase(r, url, true, state);
   assert.equal(count(b.fields.palette, ':DM=1'), 2); assert.equal(count(b.fields.palette, ':DM=0'), 2);
   assert.match(b.fields.statusEdit, /DM\t0\t0/); assert.match(b.fields.statusEdit, /ドッジムーブ\t2\t2/);
-  assert.ok(b.fields.palette.includes('{DM}*(4)'));
+  assert.ok(b.fields.palette.includes('{DM}*(2+2)'));
   for (const range of b.prepared.ranges) assert.equal(b.prepared.text.slice(range.start, range.end), range.expected);
   const located = locateSavedRanges(b.prepared, b.fields.palette); assert.ok(located.ranges.every(r => !r.edited));
   assert.equal(JSON.parse(characterJson(b.fields)).data.commands, b.fields.palette);

@@ -16,7 +16,8 @@ export type CalculationEditor = (() => void) & { getState: () => CalculationStat
 export function targetKey(t: RollTarget): string {
   return JSON.stringify([
     t.skillName ? "skill" : "general",
-    t.skillName ?? t.title,
+    // Preserve saved choices when the common reaction checks move out of resources.
+    t.skillName ?? t.title.replace(/^リアクション：(?=回避判定$|【精神】判定（リアクション）$)/, "リソース操作："),
     t.kind,
     t.judge ?? "",
     t.kind === "hpSet" ? "HP設定値（回復量とは別）" : t.suffix,
