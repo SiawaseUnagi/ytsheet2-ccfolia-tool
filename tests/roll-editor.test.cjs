@@ -1,17 +1,8 @@
-const { test, after } = require('node:test');
+const {test, after} = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const os = require('node:os');
-const path = require('node:path');
-const { execFileSync } = require('node:child_process');
-const root = path.join(__dirname, '..');
-const out = fs.mkdtempSync(path.join(os.tmpdir(), 'ytsheet-roll-ui-'));
-// Test the calculation modules in isolation. The existing test suites typecheck the whole app.
-const flags = ['--target','ES2020','--module','commonjs','--moduleResolution','node','--strict','--lib','ES2020,DOM,DOM.Iterable','--outDir',out,'src/calculation/ui.ts'];
-const localTsc = path.join(root,'node_modules/typescript/bin/tsc');
-try { fs.existsSync(localTsc) ? execFileSync(process.execPath,[localTsc,...flags],{cwd:root,stdio:'pipe'}) : execFileSync('tsc',flags,{cwd:root,stdio:'pipe'}); }
-catch(e) { console.error(String(e.stdout));fs.rmSync(out,{recursive:true,force:true});throw e; }
-after(()=>fs.rmSync(out,{recursive:true,force:true}));
+const fs = require('node:fs'), path = require('node:path');
+const root = path.resolve(__dirname, '..');
+const out = require('./compile.cjs')();
 const { skillRolls, analyzeModifiers, compatible } = require(path.join(out,'calculation/analysis.js'));
 const { renderRoll, prepareCalculationPalette } = require(path.join(out,'calculation/palette.js'));
 const { gatedTerm } = require(path.join(out,'calculation/expression.js'));
@@ -122,13 +113,15 @@ test('shared alias rename remains synchronized with checkbox ownership',()=>{
  }finally{u.dispose()}
 });
 test('persistent explanations are in help, not the main correction panel',()=>{
- const main=fs.readFileSync(path.join(root,'src/main.ts'),'utf8'),ui=fs.readFileSync(path.join(root,'src/calculation/ui.ts'),'utf8'),session=fs.readFileSync(path.join(root,'src/session/ui.ts'),'utf8');
+ const main=fs.readFileSync(path.join(root,'src/editor/view.ts'),'utf8'),ui=fs.readFileSync(path.join(root,'src/calculation/ui.ts'),'utf8'),session=fs.readFileSync(path.join(root,'src/session/ui.ts'),'utf8');
  assert.ok(main.includes('ゆとシートのデフォルト変数を使用する'));assert.ok(main.includes("id='usageInstructions'"));assert.ok(!main.includes('ステータス（編集してからコピーすると反映'));
- assert.ok(!main.includes('パラメータ（編集してからコピーすると反映'));assert.ok(!ui.includes('回復量・HP設定値'));assert.ok(session.includes('document.getElementById("usageInstructions")'));
+ assert.ok(!main.includes('パラメータ（編集してからコピーすると反映'));assert.ok(!ui.includes('回復量・HP設定値'));assert.ok(fs.readFileSync(path.join(root,'src/editor/help.ts'),'utf8').includes('データの保存と更新'));
  assert.ok(!ui.includes('host.append(el("p", "補正を加えたい式'));
 });
 test('generic weapon attack and next skill have a blank separator',()=>{
- const source=fs.readFileSync(path.join(root,'src/palette/buildPalette.ts'),'utf8');assert.ok(source.includes('s.get("メジャー")?.push(...weaponAttackLines(), "");'));
+ const {buildPalette}=require(path.join(out,'palette/buildPalette.js'));
+ const result=buildPalette(sheet([skill('攻撃の技',1,'メジャー','対象に武器攻撃を行なう。','命中判定')]),{}).text;
+ assert.match(result,/\{ダメージ属性\}ダメージ\n\nメジャーアクションで《攻撃の技》/);
 });
 
 test('a successfully extracted protection roll is not reported as an unread modifier',()=>{

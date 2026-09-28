@@ -1,181 +1,231 @@
 import { isEvasionCompanion } from "./checkPlacement";
 import { planSkillPlacement } from "./skillPlacement";
-import type { CustomCommandMap, ParsedSheet, YtSkill } from "../ytsheet/types";
 import { skillToLines } from "./buildSkillCommands";
+import { checkFormula, renderCheck, GENERAL_CHECKS } from "./checks";
+import { textRow, serializeSections, type PaletteRow, type PaletteOutput } from "./document";
+import { singleLineText } from "../utils/normalizeText";
+import { normalizeEffect } from "../calculation/expression";
+import { isBearUp } from "../calculation/attack";
+import { readConsumableTable, consumableCommands } from "../items/tableConsumables";
+import type { CustomCommandMap, ParsedSheet, YtSkill } from "../ytsheet/types";
 
-function sec() {
-  return new Map<string, string[]>([
-    ["リソース操作", [":HP+", ":HP-", ":MP+", ":MP-", ":フェイト-", ":initiative=", "//ダメージ属性=物理", "//ダメージ属性=〈〉属性魔法", "", "2D　ドロップ品（）", "", "({回避ダイス}+{判定BD}+{回避BD})D+{回避}>=0 回避判定", "c(-{物理防御力}) 物理ダメージ計算", "c(-{魔法防御力}) 魔法ダメージ計算"]],
-    ["戦闘前", []],
-    ["セットアップ", []],
-    ["イニシアチブ", []],
-    ["フリー", []],
-    ["ムーブ", ["ムーブアクション放棄。", "ムーブアクションで戦闘移動を行なう。({移動力}m)", "ムーブアクションで全力移動を行なう。({移動力}+5m)", "ムーブアクションで離脱を行なう。"]],
-    ["レガシー", []],
-    ["マイナー", ["マイナーアクション放棄。", ""]],
-    ["メジャー", []],
-    ["判定の直前", []],
-    ["判定の直後", []],
-    ["DR直前", []],
-    ["DR直後", []],
-    ["リアクション", []],
-    ["クリンナップ", []],
-    ["戦闘不能", []],
-    ["効果参照", []],
-    ["判定", []],
-    ["プリプレイ", []],
-    ["パッシブ", []],
-    ["アイテム効果", []],
-    ["シーン終了時リセット", []],
-    ["シナリオ終了時リセット", []],
-  ]);
-}
-
-function mapTiming(t: string): string {
+const ORDER = [
+  "リソース操作",
+  "戦闘前",
+  "セットアップ",
+  "イニシアチブ",
+  "フリー",
+  "ムーブ",
+  "レガシー",
+  "マイナー",
+  "メジャー",
+  "判定の直前",
+  "判定の直後",
+  "DR直前",
+  "DR直後",
+  "リアクション",
+  "クリンナップ",
+  "戦闘不能",
+  "効果参照",
+  "判定",
+  "プリプレイ",
+  "パッシブ",
+  "アイテム効果",
+  "シーン終了時リセット",
+  "シナリオ終了時リセット",
+];
+export function mapTiming(t: string): string {
   if (/パッシブ/.test(t)) return "パッシブ";
-  if (/戦闘前/.test(t)) return "戦闘前";
-  if (/セットアップ/.test(t)) return "セットアップ";
-  if (/イニシアチブ/.test(t)) return "イニシアチブ";
-  if (/フリー/.test(t)) return "フリー";
-  if (/ムーブ/.test(t)) return "ムーブ";
-  if (/レガシー/.test(t)) return "レガシー";
-  if (/マイナー/.test(t)) return "マイナー";
-  if (/メジャー/.test(t)) return "メジャー";
+  for (const name of [
+    "戦闘前",
+    "セットアップ",
+    "イニシアチブ",
+    "フリー",
+    "ムーブ",
+    "レガシー",
+    "マイナー",
+    "メジャー",
+  ])
+    if (t.includes(name)) return name;
   if (/判定.*直前/.test(t)) return "判定の直前";
   if (/判定.*直後/.test(t)) return "判定の直後";
-  if (/ダメージロール.*直前|DRの直前|DR直前/.test(t)) return "DR直前";
-  if (/ダメージロール.*直後|DRの直後|DR直後/.test(t)) return "DR直後";
-  if (/リアクション/.test(t)) return "リアクション";
-  if (/クリンナップ/.test(t)) return "クリンナップ";
-  if (/戦闘不能/.test(t)) return "戦闘不能";
+  if (/(?:ダメージロール|DR).*直前/.test(t)) return "DR直前";
+  if (/(?:ダメージロール|DR).*直後/.test(t)) return "DR直後";
+  for (const name of ["リアクション", "クリンナップ", "戦闘不能"])
+    if (t.includes(name)) return name;
   return "効果参照";
 }
-
-function looksLikeUnreadLimitedUse(usage: string): boolean {
-  return /(シーン|シナリオ)\s*(?:\d+|SL(?:\s*[＋+]\s*\d+)?)\s*回/.test(usage);
-}
-function cleanHtml(text: unknown): string {
-  return String(text ?? "").replace(/&lt;br&gt;/g, " ").replace(/<br\s*\/?>/g, " ").replace(/\s+/g, " ").trim();
-}
-function isPreplaySkill(skill: YtSkill): boolean {
-  return /アイテム/.test(skill.timing) || /^プリプレイで/.test(cleanHtml(skill.effect));
-}
-function preplayDeclarationLine(skills: YtSkill[]): string | null {
-  if (skills.length === 0) return null;
-  const parts = ["プリプレイ"];
-  for (const skill of skills) {
-    const effect = cleanHtml(skill.effect);
-    parts.push(`《${skill.name}》${skill.level}：${effect || "効果参照"}`);
-  }
-  return parts.join("\\n");
-}
-function collectEquipmentNotes(sheet: ParsedSheet): string[] {
-  const slots = [
-    ["右手", "armamentHandRName", "armamentHandRNote"],
-    ["左手", "armamentHandLName", "armamentHandLNote"],
-    ["頭部", "armamentHeadName", "armamentHeadNote"],
-    ["胴部", "armamentBodyName", "armamentBodyNote"],
-    ["補助防具", "armamentSubName", "armamentSubNote"],
-    ["装身具", "armamentOtherName", "armamentOtherNote"],
-  ];
-  const lines: string[] = [];
-  for (const [slot, nameKey, noteKey] of slots) {
-    const name = cleanHtml(sheet.raw[nameKey]), note = cleanHtml(sheet.raw[noteKey]);
-    if (name && note) lines.push(`${slot}：${name}。${note}`);
-  }
-  return lines;
-}
-function weaponAttackLines(): string[] {
-  return [
-    "メジャーアクションで武器攻撃を行う。",
-    "({命中ダイス}+{判定BD}+{命中BD})D+{命中}>=0 命中判定",
-    "({攻撃ダイス}+{ダメBD})D+{攻撃力}+{ダメバフ} {ダメージ属性}ダメージ",
-  ];
-}
-type SkillOutput = {
-  skill: YtSkill; target: string; lines: string[];
-  resets: { scope: "scene" | "scenario"; line: string }[]; usageLimit: unknown;
+const flat = (s: string) => s.replace(/\s+/g, " ").trim();
+const preplaySkill = (s: YtSkill) =>
+  /アイテム/.test(s.timing) || /^プリプレイで/.test(flat(s.effect));
+const checkRow = (name: string, weaponCheck = false): PaletteRow => {
+  const check = checkFormula(name)!;
+  return { text: renderCheck(check), check, weaponCheck };
 };
-function pushResets(map: Map<string, string[]>, resets: SkillOutput["resets"]) {
-  for (const r of resets) {
-    const lines = map.get(r.scope === "scene" ? "シーン終了時リセット" : "シナリオ終了時リセット");
-    if (lines && !lines.includes(r.line)) lines.push(r.line);
-  }
+export function spiritReaction(sheet: ParsedSheet): string {
+  const check = checkFormula(
+    "精神",
+    sheet.skills.some((s) => isBearUp(s.name) && s.level > 0) ? 1 : 0,
+  )!;
+  return renderCheck({ ...check, suffix: check.suffix + "（リアクション）" });
 }
-
-export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): { text: string; warnings: string[] } {
-  const s = sec(), warnings = [...sheet.warnings];
-  const evasionSection = "__evasion_companions";
-  s.set(evasionSection, []);
-  s.get("メジャー")?.push(...weaponAttackLines(), "");
-  const placement = planSkillPlacement(sheet.skills);
-  warnings.push(...placement.warnings);
-  const outputs: SkillOutput[] = sheet.skills.map(skill => {
-    const out = skillToLines(skill, custom);
-    if (!out.usageLimit && looksLikeUnreadLimitedUse(skill.usage)) warnings.push(`《${skill.name}》：使用制限を読み取れませんでした。`);
-    return { skill, target: mapTiming(skill.timing), lines: out.lines, resets: out.resets, usageLimit: out.usageLimit };
-  });
-  const preplaySkills: YtSkill[] = [];
+export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): PaletteOutput {
+  const sections = new Map<string, PaletteRow[]>(ORDER.map((name) => [name, []]));
+  const append = (section: string, ...rows: PaletteRow[]) => sections.get(section)!.push(...rows);
+  append(
+    "リソース操作",
+    ...[
+      ":HP+",
+      ":HP-",
+      ":MP+",
+      ":MP-",
+      ":フェイト-",
+      ":initiative=",
+      "//ダメージ属性=物理",
+      "//ダメージ属性=〈〉属性魔法",
+      "",
+      "2D　ドロップ品（）",
+      "",
+    ].map(textRow),
+    checkRow("回避"),
+  );
+  append(
+    "ムーブ",
+    ...[
+      "ムーブアクション放棄。",
+      "ムーブアクションで戦闘移動を行なう。({移動力}m)",
+      "ムーブアクションで全力移動を行なう。({移動力}+5m)",
+      "ムーブアクションで離脱を行なう。",
+    ].map(textRow),
+  );
+  append("マイナー", textRow("マイナーアクション放棄。"), textRow(""));
+  const table = readConsumableTable(sheet.raw);
+  // Consumable blocks are built directly at their section, not injected by reparsing output.
+  for (const item of table.items)
+    for (const timing of item.timings)
+      append(timing, ...consumableCommands(item, timing).map(textRow), textRow(""));
+  append(
+    "メジャー",
+    textRow("メジャーアクションで武器攻撃を行う。"),
+    checkRow("命中", true),
+    {
+      text: "({攻撃ダイス}+{ダメBD})D+{攻撃力}+{ダメバフ} {ダメージ属性}ダメージ",
+      weaponDamage: true,
+    },
+    textRow(""),
+  );
+  const placement = planSkillPlacement(sheet.skills),
+    warnings = [...sheet.warnings, ...table.warnings, ...placement.warnings];
+  const preplay: YtSkill[] = [],
+    evade: PaletteRow[] = [];
+  const addResets = (resets: ReturnType<typeof skillToLines>["resets"]) => {
+    for (const r of resets) {
+      const key = r.scope === "scene" ? "シーン終了時リセット" : "シナリオ終了時リセット";
+      if (!sections.get(key)!.some((row) => row.text === r.line)) append(key, textRow(r.line));
+    }
+  };
   let emitted = 0;
   for (const root of placement.roots) {
-    const preplayRoot = isPreplaySkill(outputs[root].skill);
-    const target = preplayRoot ? "プリプレイ" : isEvasionCompanion(outputs[root].skill) ? evasionSection : outputs[root].target;
+    const isPreplay = preplaySkill(sheet.skills[root]);
+    const target = isPreplay
+      ? sections.get("プリプレイ")!
+      : isEvasionCompanion(sheet.skills[root])
+        ? evade
+        : sections.get(mapTiming(sheet.skills[root].timing))!;
     const stack: { index: number; timing?: string; path: number[] }[] = [{ index: root, path: [] }];
     while (stack.length) {
-      const entry = stack.pop()!, { index, path } = entry, item = outputs[index];
-      if (path.includes(index) || ++emitted > 10000) {
-        warnings.push(`《${item.skill.name}》：追加配置が循環するか多すぎるため、一部の配置を省きました。`); break;
+      const entry = stack.pop()!,
+        skill = sheet.skills[entry.index];
+      if (entry.path.includes(entry.index) || ++emitted > 10000) {
+        warnings.push(
+          `《${skill.name}》：追加配置が循環するか多すぎるため、一部の配置を省きました。`,
+        );
+        break;
       }
-      if (preplayRoot && isPreplaySkill(item.skill)) preplaySkills.push(item.skill);
+      if (isPreplay && preplaySkill(skill)) preplay.push(skill);
       else {
-        const lines = s.get(target)!, passive = /パッシブ/.test(item.skill.timing);
-        // The extra occurrence declares the effective timing; effects, cost, rolls and
-        // the shared usage counter remain those of the original skill.
-        const timing = entry.timing ?? (isEvasionCompanion(item.skill) ? "回避判定と同時" : undefined);
-        const out = timing ? skillToLines({ ...item.skill, timing }, custom) : item;
-        if (!passive && lines.length && lines[lines.length - 1] !== "") lines.push("");
-        lines.push(...out.lines);
-        if (!passive || target !== "パッシブ") lines.push("");
-        pushResets(s, out.resets);
+        const timing = entry.timing ?? (isEvasionCompanion(skill) ? "回避判定と同時" : undefined);
+        const effective = timing ? { ...skill, timing } : skill,
+          out = skillToLines(effective, custom),
+          passive = /パッシブ/.test(skill.timing);
+        if (!out.usageLimit && /(シーン|シナリオ)[^。]*回/.test(normalizeEffect(skill.usage)))
+          warnings.push(`《${skill.name}》：使用制限を読み取れませんでした。`);
+        if (!passive && target.length && target[target.length - 1].text !== "")
+          target.push(textRow(""));
+        const origin = { index: entry.index, name: skill.name, level: skill.level };
+        target.push(
+          ...out.lines.map(
+            (text, i): PaletteRow => ({
+              text,
+              skill: origin,
+              declaration: i === 0,
+              ...(i === out.checkIndex && out.check ? { check: out.check } : {}),
+              effectsAfter: i === out.effectsAfter,
+            }),
+          ),
+        );
+        if (
+          !passive ||
+          mapTiming(skill.timing) !== "パッシブ" ||
+          target !== sections.get("パッシブ")
+        )
+          target.push(textRow(""));
+        addResets(out.resets);
       }
-      const nextPath = [...path, index];
-      const next = [
-        ...(placement.alternates.get(index) ?? []).map(copy => ({ ...copy, path: nextPath })),
-        ...(placement.children.get(index) ?? []).map(child => ({ index: child, path: nextPath })),
-      ];
-      stack.push(...next.reverse());
+      const path = [...entry.path, entry.index];
+      stack.push(
+        ...[
+          ...(placement.alternates.get(entry.index) ?? []).map((copy) => ({ ...copy, path })),
+          ...(placement.children.get(entry.index) ?? []).map((index) => ({ index, path })),
+        ].reverse(),
+      );
     }
   }
-  const preplay = preplayDeclarationLine(preplaySkills);
-  if (preplay) s.get("プリプレイ")?.unshift(preplay, "");
-  s.get("アイテム効果")?.push(...collectEquipmentNotes(sheet));
-  s.get("判定")?.push(
-    "({筋力判定ダイス}+{判定BD})D+{筋力判定}>=0 【筋力】判定",
-    "({器用判定ダイス}+{判定BD})D+{器用判定}>=0 【器用】判定",
-    "({敏捷判定ダイス}+{判定BD})D+{敏捷判定}>=0 【敏捷】判定",
-    "({知力判定ダイス}+{判定BD})D+{知力判定}>=0 【知力】判定",
-    "({感知判定ダイス}+{判定BD})D+{感知判定}>=0 【感知】判定",
-    "({精神判定ダイス}+{判定BD})D+{精神判定}>=0 【精神】判定",
-    "({幸運判定ダイス}+{判定BD})D+{幸運判定}>=0 【幸運】判定",
-    "({命中ダイス}+{判定BD}+{命中BD})D+{命中}>=0 命中判定",
-    "({回避ダイス}+{判定BD}+{回避BD})D+{回避}>=0 回避判定",
-    "({トラップ探知ダイス}+{判定BD})D+{トラップ探知}>=0 トラップ探知判定",
-    "({トラップ解除ダイス}+{判定BD})D+{トラップ解除}>=0 トラップ解除判定",
-    "({危険感知ダイス}+{判定BD})D+{危険感知}>=0 危険感知判定",
-    "({エネミー識別ダイス}+{判定BD})D+{エネミー識別}>=0 エネミー識別判定",
-    "({アイテム鑑定ダイス}+{判定BD})D+{アイテム鑑定}>=0 アイテム鑑定判定",
-    "({魔術判定ダイス}+{判定BD}+{命中BD})D+{魔術判定}>=0 魔術判定",
-    "({呪歌判定ダイス}+{判定BD})D+{呪歌判定}>=0 呪歌判定",
-    "({錬金術判定ダイス}+{判定BD})D+{錬金術判定}>=0 錬金術判定",
-  );
-  // Duplicate the complete companion block under both common evasion rolls.
-  // Counters and resets were created once above and are shared by these copies.
-  const evasionLines = s.get(evasionSection)!;
-  s.delete(evasionSection);
-  if (evasionLines.length) for (const section of ["リソース操作", "判定"]) {
-    const lines = s.get(section)!;
-    const anchor = lines.findIndex(line => line.endsWith(">=0 回避判定"));
-    if (anchor >= 0) lines.splice(anchor + 1, 0, ...evasionLines);
+  if (preplay.length)
+    sections
+      .get("プリプレイ")!
+      .unshift(
+        textRow(
+          [
+            "プリプレイ",
+            ...preplay.map(
+              (skill) => `《${skill.name}》${skill.level}：${flat(skill.effect) || "効果参照"}`,
+            ),
+          ].join("\\n"),
+        ),
+        textRow(""),
+      );
+  for (const [slot, caption] of [
+    ["HandR", "右手"],
+    ["HandL", "左手"],
+    ["Head", "頭部"],
+    ["Body", "胴部"],
+    ["Sub", "補助防具"],
+    ["Other", "装身具"],
+  ]) {
+    const name = singleLineText(sheet.raw[`armament${slot}Name`]),
+      note = singleLineText(sheet.raw[`armament${slot}Note`]);
+    if (name && note) append("アイテム効果", textRow(`${caption}：${name}。${note}`));
   }
-  return { text: [...s].map(([name, lines]) => `### ■${name}\n${lines.join("\n")}`.trimEnd()).join("\n\n"), warnings };
+  append("判定", ...GENERAL_CHECKS.map((name) => checkRow(name)));
+  for (const section of ["リソース操作", "判定"]) {
+    const rows = sections.get(section)!,
+      anchor = rows.findIndex((row) => row.check?.judge === "回避判定");
+    if (anchor >= 0) rows.splice(anchor + 1, 0, ...evade.map((row) => ({ ...row })));
+  }
+  const spirit = checkFormula(
+    "精神",
+    sheet.skills.some((s) => isBearUp(s.name) && s.level > 0) ? 1 : 0,
+  )!;
+  spirit.suffix += "（リアクション）";
+  spirit.judge = spirit.suffix;
+  append(
+    "リソース操作",
+    { text: renderCheck(spirit), check: spirit },
+    textRow("c(-{物理防御力}) 物理ダメージ計算"),
+    textRow("c(-{魔法防御力}) 魔法ダメージ計算"),
+  );
+  if (table.items.some((item) => item.label === "強心丹" && /シーン終了まで持続/.test(item.effect)))
+    sections.get("シーン終了時リセット")!.unshift(textRow(":強心丹D=0"));
+  return serializeSections(sections, warnings);
 }

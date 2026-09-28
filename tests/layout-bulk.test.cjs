@@ -1,18 +1,9 @@
-const {test,after}=require('node:test');
-const assert=require('node:assert/strict');
-const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
-const {execFileSync}=require('node:child_process');
-const root=path.resolve(__dirname,'..'), standalone=process.env.PATCH_COMPONENTS_ONLY==='1';
-const ts=require(process.env.TYPESCRIPT_PATH||'typescript');
-const out=fs.mkdtempSync(path.join(os.tmpdir(),'ytsheet-layout-'));
-after(()=>fs.rmSync(out,{recursive:true,force:true}));
-if(standalone) {
- for(const name of ['palette/skillPlacement','calculation/bulkChecks']) {
-  const result=ts.transpileModule(fs.readFileSync(path.join(root,'src',name+'.ts'),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022},reportDiagnostics:true});
-  assert.equal(result.diagnostics.filter(d=>d.category===ts.DiagnosticCategory.Error).length,0);
-  const dest=path.join(out,name+'.js');fs.mkdirSync(path.dirname(dest),{recursive:true});fs.writeFileSync(dest,result.outputText);
- }
-} else execFileSync(process.execPath,[path.join(root,'node_modules/typescript/bin/tsc'),'--project',path.join(root,'tsconfig.json'),'--noEmit','false','--module','commonjs','--moduleResolution','node','--outDir',out],{cwd:root,stdio:'inherit'});
+const {test, after} = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs'), path = require('node:path');
+const root = path.resolve(__dirname, '..');
+const out = require('./compile.cjs')();
+const standalone = false;
 const {simultaneousSkillNames,planSkillPlacement}=require(path.join(out,'palette/skillPlacement.js'));
 const {isAllChecksModifier,setAllCheckChoices}=require(path.join(out,'calculation/bulkChecks.js'));
 const skill=(name,effect='',timing='効果参照')=>({name,effect,timing,level:1,cost:'3',judge:'自動成功',target:'自身',range:'―',usage:'―'});
