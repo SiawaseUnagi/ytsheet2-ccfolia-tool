@@ -52,13 +52,12 @@ function timingSentence(sentence: string): string[] | null {
     .replace(/^タイミング[:：]\s*/, "")
     .replace(/(?:で|に)(?:も)?使用(?:することができる|可能となる|可能|できる|する)$/, "")
     .trim();
-  const tokens = text.split(/[、,／/・]/).map((t) =>
-    t
-      .trim()
-      .replace(/(?:アクション|プロセス)$/, "")
-      .replace(/ダメージロール/g, "DR")
-      .replace(/の直/g, "直"),
-  );
+  const tokens = text.split(/[、,／/・]/).map((part) => {
+    const token = part.trim().replace(/ダメージロール/g, "DR").replace(/の直/g, "直");
+    // リアクション is itself a timing name, not a suffix to strip to リ.
+    return Object.prototype.hasOwnProperty.call(TIMINGS, token)
+      ? token : token.replace(/(?:アクション|プロセス)$/, "");
+  });
   if (!tokens.length || tokens.some((t) => !Object.prototype.hasOwnProperty.call(TIMINGS, t)))
     return null;
   return [...new Set(tokens.map((t) => TIMINGS[t][0]))];

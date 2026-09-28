@@ -26,6 +26,8 @@ export type Modifier = {
   level?: number;
   effect: string;
   amount: Amount;
+  /** SL substituted, arithmetic retained for displaying fixed check/damage bonuses. */
+  fixedExpression?: string;
   kinds: RollKind[];
   attack?: AttackKind;
   judge?: string;
@@ -343,6 +345,12 @@ export function analyzeModifiers(sheet: ParsedSheet): Analysis {
               /^(?:HP|MP|CL|フェイト|攻撃力|移動力)$/.test(source.name)
             ? `${source.name}_補正`
             : source.name;
+        const expanded = source.skill && type.kinds.some(kind => kind === "check" || kind === "damage")
+          ? leadingAmount(sentence.slice(m.index! + m[0].length), source.level, true)?.amount.fixed
+          : undefined;
+        const fixedExpression = expanded && expanded !== parsed.amount.fixed && parsed.amount.fixed !== "0"
+          ? m[1] === "-" ? `-(${expanded})` : expanded
+          : undefined;
         modifiers.push({
           id: `${source.id}-${modifiers.length}`,
           source: source.name,
@@ -350,6 +358,7 @@ export function analyzeModifiers(sheet: ParsedSheet): Analysis {
           ...(source.origin ? { origin: source.origin } : {}),
           effect: `${source.effect}${source.usage && source.usage !== "―" ? ` 使用条件：${source.usage}` : ""}`,
           amount,
+          ...(fixedExpression ? { fixedExpression } : {}),
           kinds: type.kinds,
           ...type,
           attribute: /[〈<]([^〉>]+)[〉>]属性/.exec(prefix)?.[1],

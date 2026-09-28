@@ -29,14 +29,14 @@ module.exports = async function checkFlagBrowserCases(context, url) {
     assert.equal(await check.isChecked(), false); await check.check();
     const withFlag = await text();
     assert.equal(count(withFlag, ':ドッジムーブ=1'), 2); assert.equal(count(withFlag, ':ドッジムーブ=0'), 2);
-    assert.match(withFlag, /\{ドッジムーブ\}\*\(4\)/);
+    assert.match(withFlag, /\{ドッジムーブ\}\*\(2\+2\)/);
     assert.match(await page.locator('#statusEdit').inputValue(), /ドッジムーブ\t0\t0/);
     await check.uncheck(); await check.check(); assert.equal(await text(), withFlag);
     const names = card.locator('details[data-flag-editor]').filter({ has: page.locator('input[aria-label="ドッジムーブの補正用変数名"]') });
     await names.locator(':scope > summary').click(); await names.locator('input').fill('DM');
     await names.getByText('名前を適用', { exact: true }).click();
     const renamed = await text(); assert.equal(count(renamed, ':DM=1'), 2); assert.equal(count(renamed, ':DM=0'), 2);
-    assert.ok(!renamed.includes(':ドッジムーブ=1')); assert.match(renamed, /\{DM\}\*\(4\)/);
+    assert.ok(!renamed.includes(':ドッジムーブ=1')); assert.match(renamed, /\{DM\}\*\(2\+2\)/);
     // Preserve an edited evasion formula while another copy still changes.
     const oldRoll = renamed.split('\n').find(line => line.endsWith('>=0 回避判定'));
     const edited = renamed.replace(oldRoll, oldRoll.replace('>=0', '>=12'));

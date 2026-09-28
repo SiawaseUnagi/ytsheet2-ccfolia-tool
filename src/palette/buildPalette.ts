@@ -11,6 +11,7 @@ import type { CustomCommandMap, ParsedSheet, YtSkill } from "../ytsheet/types";
 
 const ORDER = [
   "リソース操作",
+  "リアクション",
   "戦闘前",
   "セットアップ",
   "イニシアチブ",
@@ -23,7 +24,6 @@ const ORDER = [
   "判定の直後",
   "DR直前",
   "DR直後",
-  "リアクション",
   "クリンナップ",
   "戦闘不能",
   "効果参照",
@@ -87,8 +87,8 @@ export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): Pale
       "2D　ドロップ品（）",
       "",
     ].map(textRow),
-    checkRow("回避"),
   );
+  append("リアクション", checkRow("回避"));
   append(
     "ムーブ",
     ...[
@@ -208,7 +208,7 @@ export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): Pale
     if (name && note) append("アイテム効果", textRow(`${caption}：${name}。${note}`));
   }
   append("判定", ...GENERAL_CHECKS.map((name) => checkRow(name)));
-  for (const section of ["リソース操作", "判定"]) {
+  for (const section of ["リアクション", "判定"]) {
     const rows = sections.get(section)!,
       anchor = rows.findIndex((row) => row.check?.judge === "回避判定");
     if (anchor >= 0) rows.splice(anchor + 1, 0, ...evade.map((row) => ({ ...row })));
@@ -219,11 +219,15 @@ export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): Pale
   )!;
   spirit.suffix += "（リアクション）";
   spirit.judge = spirit.suffix;
-  append(
-    "リソース操作",
+  // Keep shared reaction checks before reaction skills/consumables, with evasion
+  // companions immediately below evasion. The section has only one heading.
+  sections.get("リアクション")!.splice(
+    1 + evade.length,
+    0,
     { text: renderCheck(spirit), check: spirit },
     textRow("c(-{物理防御力}) 物理ダメージ計算"),
     textRow("c(-{魔法防御力}) 魔法ダメージ計算"),
+    textRow(""),
   );
   if (table.items.some((item) => item.label === "強心丹" && /シーン終了まで持続/.test(item.effect)))
     sections.get("シーン終了時リセット")!.unshift(textRow(":強心丹D=0"));

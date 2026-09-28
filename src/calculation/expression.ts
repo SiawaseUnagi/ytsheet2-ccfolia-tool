@@ -1,25 +1,38 @@
 /** Small, non-executing parser: SL is resolved; CL and abilities remain references. */
 export type Amount = { dice: string; fixed: string };
-type Scalar = { text: string; number?: number };
+type Scalar = { text: string; number?: number; fromSkillLevel?: boolean };
 type Value = { dice: Scalar; fixed: Scalar };
 const ABILITIES = ["筋力", "器用", "敏捷", "知力", "感知", "精神", "幸運"];
 const num = (n: number): Scalar => ({ text: String(n), number: n });
 const zero = (): Value => ({ dice: num(0), fixed: num(0) });
 const wrap = (s: Scalar) =>
-  s.number !== undefined || /^\{[^{}]+\}$/.test(s.text) ? s.text : `(${s.text})`;
+  /^(?:-?\d+(?:\.\d+)?|\{[^{}]+\})$/.test(s.text) ? s.text : `(${s.text})`;
 
+/** Retain numeric values for validation, but do not fold SL-derived fixed bonuses. */
 function add(a: Scalar, b: Scalar, sign = 1): Scalar {
-  if (a.number !== undefined && b.number !== undefined) return num(a.number + sign * b.number);
-  if (b.number === 0) return a;
-  if (a.number === 0) return sign === 1 ? b : { text: `-(${b.text})` };
-  return { text: `${a.text}${sign === 1 ? "+" : "-"}${wrap(b)}` };
+  if (b.number === 0 && !b.fromSkillLevel) return a;
+  if (a.number === 0 && !a.fromSkillLevel)
+    return sign === 1 ? b : b.fromSkillLevel ? mul(num(-1), b) : { text: `-(${b.text})` };
+  if (!a.fromSkillLevel && !b.fromSkillLevel && a.number !== undefined && b.number !== undefined)
+    return num(a.number + sign * b.number);
+  return {
+    text: `${a.text}${sign === 1 ? "+" : "-"}${wrap(b)}`,
+    ...(a.number !== undefined && b.number !== undefined ? { number: a.number + sign * b.number } : {}),
+    ...(a.fromSkillLevel || b.fromSkillLevel ? { fromSkillLevel: true } : {}),
+  };
 }
 function mul(a: Scalar, b: Scalar): Scalar {
   if (a.number === 0 || b.number === 0) return num(0);
-  if (a.number !== undefined && b.number !== undefined) return num(a.number * b.number);
-  if (a.number === 1) return b;
-  if (b.number === 1) return a;
-  return { text: `${wrap(a)}*${wrap(b)}` };
+  if (!a.fromSkillLevel && !b.fromSkillLevel) {
+    if (a.number !== undefined && b.number !== undefined) return num(a.number * b.number);
+    if (a.number === 1) return b;
+    if (b.number === 1) return a;
+  }
+  return {
+    text: `${wrap(a)}*${wrap(b)}`,
+    ...(a.number !== undefined && b.number !== undefined ? { number: a.number * b.number } : {}),
+    ...(a.fromSkillLevel || b.fromSkillLevel ? { fromSkillLevel: true } : {}),
+  };
 }
 
 export function normalizeEffect(text: string): string {
@@ -32,7 +45,7 @@ export function normalizeEffect(text: string): string {
     .trim();
 }
 
-export function parseAmount(input: string, skillLevel: number): Amount | null {
+export function parseAmount(input: string, skillLevel: number, preserveSkillLevel = false): Amount | null {
   if (!Number.isInteger(skillLevel) || skillLevel < 0 || input.length > 200) return null;
   let text = normalizeEffect(input)
     .replace(/【([^】]+)】/g, "{$1}")
@@ -65,7 +78,7 @@ export function parseAmount(input: string, skillLevel: number): Amount | null {
         dice: mul(num(token === "-" ? -1 : 1), a.dice),
         fixed: mul(num(token === "-" ? -1 : 1), a.fixed),
       };
-    } else if (token === "SL") result = { ...zero(), fixed: num(skillLevel) };
+    } else if (token === "SL") result = { ...zero(), fixed: { ...num(skillLevel), ...(preserveSkillLevel ? { fromSkillLevel: true } : {}) } };
     else if (token === "CL" || token === "{CL}" || ABILITIES.some((a) => token === `{${a}}`)) {
       result = { ...zero(), fixed: { text: token === "CL" ? "{CL}" : token } };
     } else if (token && /^\d+(?:\.\d+)?$/.test(token))
@@ -107,7 +120,7 @@ export function parseAmount(input: string, skillLevel: number): Amount | null {
         return null;
     }
     if (value.dice.number !== undefined && !Number.isInteger(value.dice.number)) return null;
-    return { dice: value.dice.text, fixed: value.fixed.text };
+    return { dice: preserveSkillLevel && value.dice.number !== undefined ? String(value.dice.number) : value.dice.text, fixed: value.fixed.text };
   } catch {
     return null;
   }
@@ -117,6 +130,7 @@ export function parseAmount(input: string, skillLevel: number): Amount | null {
 export function leadingAmount(
   text: string,
   level: number,
+  preserveSkillLevel = false,
 ): { amount: Amount; rest: string } | null {
   const s = normalizeEffect(text).trim();
   let end = 0,
@@ -148,7 +162,7 @@ export function leadingAmount(
     }
     break;
   }
-  const amount = parseAmount(s.slice(0, end).trim(), level);
+  const amount = parseAmount(s.slice(0, end).trim(), level, preserveSkillLevel);
   return amount ? { amount, rest: s.slice(end) } : null;
 }
 
