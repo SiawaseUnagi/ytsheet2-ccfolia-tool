@@ -94,7 +94,7 @@ test('both heal occurrences share compatible choices, without merging another sk
  const targets=p.targets.filter(t=>t.skillName==='ヒール'&&t.kind==='hpHeal'),m=p.modifiers.find(m=>m.source==='回復強化');assert.equal(targets.length,2);
  assert.equal(targetKey(targets[0]),targetKey(targets[1]));const groups=groupCalculationTargets(p.targets,p.modifiers),g=groups.find(g=>g.targets.includes(targets[0]));assert.equal(g.targets.length,2);
  const state=emptyCalculationState();state.choices.push({target:targetKey(targets[0]),modifier:modifierKey(m,p.modifiers),checked:true,toggle:false});
- const selected=applyCalculationState(p,state);assert.equal(count(selected.text,'(3)D+{CL}*3+6 HP回復量'),2);
+ const selected=applyCalculationState(p,state);assert.equal(count(selected.text,'(3)D+{CL}*3+(3*2) HP回復量'),2);
 });
 test('manual edit in one copy is protected; the other still accepts changes and resumes',()=>{
  const s=make({skill:[heal,quick]}),p=prepareCalculationPalette(s,buildPalette(s,{}).text),targets=p.targets.filter(t=>t.kind==='hpHeal');
@@ -109,5 +109,5 @@ test('save/update retains shared choices and updates both recovery formulas afte
  state.choices.push({target:targetKey(t),modifier:modifierKey(m,p.modifiers),checked:true,toggle:false});const b=generateSessionBase(r,url,true,state);
  const old={key:b.key,name:b.sheet.name,raw:r,url,useFormula:true,savedAt:new Date().toISOString(),calculation:state,base:b.fields,working:{...b.fields,palette:b.fields.palette+'\n自由な追記'}};
  const saved=parseSaveFile(JSON.stringify(fileFor(old))).current,nextRaw=structuredClone(r);nextRaw.skill[2].lv=3;nextRaw.hpTotal='45';
- const plan=planSessionUpdate(saved,nextRaw);assert.equal(plan.conflicts.length,0);assert.equal(count(plan.next.working.palette,'(3)D+{CL}*3+9 HP回復量'),2);assert.ok(plan.next.working.palette.endsWith('自由な追記'));
+ const plan=planSessionUpdate(saved,nextRaw);assert.equal(plan.conflicts.length,0);assert.equal(count(plan.next.working.palette,'(3)D+{CL}*3+(3*3) HP回復量'),2);assert.ok(plan.next.working.palette.endsWith('自由な追記'));
 });

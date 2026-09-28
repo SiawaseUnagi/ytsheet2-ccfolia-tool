@@ -14,9 +14,15 @@ export const emptyCalculationState = (): CalculationState => ({
 });
 export type CalculationEditor = (() => void) & { getState: () => CalculationState };
 export function targetKey(t: RollTarget): string {
+  // These two general checks moved for display only. Keep the v1 resource keys.
+  const title =
+    t.kind === "check" &&
+    ["リアクション：回避判定", "リアクション：【精神】判定（リアクション）"].includes(t.title)
+      ? t.title.replace(/^リアクション：/, "リソース操作：")
+      : t.title;
   return JSON.stringify([
     t.skillName ? "skill" : "general",
-    t.skillName ?? t.title,
+    t.skillName ?? title,
     t.kind,
     t.judge ?? "",
     t.kind === "hpSet" ? "HP設定値（回復量とは別）" : t.suffix,

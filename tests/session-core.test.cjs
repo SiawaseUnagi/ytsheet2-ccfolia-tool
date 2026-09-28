@@ -92,15 +92,15 @@ test('level-up updates selected SL formula even when skill rows shift',()=>{
  s.working.paramsEdit+='\n手動追加 42';
  s.working.statusEdit=s.working.statusEdit.replace('HP\t54\t54','HP 10 54').replace('MP\t69\t69','MP 5 69').replace('フェイト\t5\t5','フェイト 0 5').replace('補正試験\t3\t3','補正試験 0 3').replace('WB\t0\t0','WB 1 0').replace('HPP\t3\t0','HPP 0 0');
  const p=planSessionUpdate(s,levelUp(s.raw));assert.equal(p.conflicts.length,0,JSON.stringify(p.conflicts));
- assert.ok(p.next.working.palette.includes('{WB}*(12)'));assert.ok(p.next.working.palette.includes('手で直した宣言。'));assert.ok(p.next.working.palette.includes('《追加試験》1'));assert.ok(!p.next.working.palette.includes('マイナーアクションでHPPを使用。'));
+ assert.ok(p.next.working.palette.includes('{WB}*(3*4)'));assert.ok(p.next.working.palette.includes('手で直した宣言。'));assert.ok(p.next.working.palette.includes('《追加試験》1'));assert.ok(!p.next.working.palette.includes('マイナーアクションでHPPを使用。'));
  const statuses=JSON.parse(characterJson(p.next.working)).data.status;const status=name=>statuses.find(s=>s.label===name);
  for(const [name,n]of [['HP','60'],['MP','75'],['フェイト','6'],['補正試験','4']])assert.deepEqual(status(name),{label:name,value:n,max:n});
  assert.deepEqual(status('WB'),{label:'WB',value:'0',max:'0'});assert.equal(status('HPP').value,'2');assert.equal(status('MPP').value,'4');
  assert.ok(p.next.working.paramsEdit.includes('手動追加 42'));assert.equal(p.next.calculation.choices.length,1);assert.equal(p.warnings.length,0);
 });
 test('directly edited damage line is a visible conflict, not rewritten',()=>{
- const s=selectedSession();s.working.palette=s.working.palette.replace('{WB}*(9)','{WB}*(9)+999');
- const p=planSessionUpdate(s,levelUp(s.raw));assert.ok(p.conflicts.some(c=>c.field.startsWith('チャットパレット')));assert.ok(p.next.working.palette.includes('{WB}*(9)+999'));
+ const s=selectedSession();s.working.palette=s.working.palette.replace('{WB}*(3*3)','{WB}*(3*3)+999');
+ const p=planSessionUpdate(s,levelUp(s.raw));assert.ok(p.conflicts.some(c=>c.field.startsWith('チャットパレット')));assert.ok(p.next.working.palette.includes('{WB}*(3*3)+999'));
 });
 test('resume retains short flags, selected healing correction and exact text',()=>{
  const s=selectedSession();s.working.palette+='\n独自の宣言';s.working.statusEdit=s.working.statusEdit.replace('HP\t54\t54','HP 3 54');
@@ -121,7 +121,7 @@ test('update refuses a different sheet before any merge',()=>{const s=selectedSe
 test('each successful update becomes the baseline for the following update',()=>{
  const s=selectedSession();s.working.palette+='\nカスタム';const one=planSessionUpdate(s,levelUp(s.raw)).next;
  const raw=structuredClone(one.raw);raw.skill.find(s=>s.name==='補正試験').lv=5;const two=planSessionUpdate(one,raw);
- assert.equal(two.conflicts.length,0);assert.ok(two.next.working.palette.includes('{WB}*(15)'));assert.ok(two.next.working.palette.endsWith('カスタム'));
+ assert.equal(two.conflicts.length,0);assert.ok(two.next.working.palette.includes('{WB}*(3*5)'));assert.ok(two.next.working.palette.endsWith('カスタム'));
 });
 test('simultaneous insertions can explicitly keep both sets of lines',()=>{
  const p=mergeText('head','head\nmy footer','head\n:newSkill=1','p');assert.equal(p.conflicts[0].allowBoth,true);

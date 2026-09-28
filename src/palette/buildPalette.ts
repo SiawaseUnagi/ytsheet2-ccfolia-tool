@@ -11,6 +11,7 @@ import type { CustomCommandMap, ParsedSheet, YtSkill } from "../ytsheet/types";
 
 const ORDER = [
   "リソース操作",
+  "リアクション",
   "戦闘前",
   "セットアップ",
   "イニシアチブ",
@@ -23,7 +24,6 @@ const ORDER = [
   "判定の直後",
   "DR直前",
   "DR直後",
-  "リアクション",
   "クリンナップ",
   "戦闘不能",
   "効果参照",
@@ -87,7 +87,20 @@ export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): Pale
       "2D　ドロップ品（）",
       "",
     ].map(textRow),
+  );
+  const spirit = checkFormula(
+    "精神",
+    sheet.skills.some((s) => isBearUp(s.name) && s.level > 0) ? 1 : 0,
+  )!;
+  spirit.suffix += "（リアクション）";
+  spirit.judge = spirit.suffix;
+  append(
+    "リアクション",
     checkRow("回避"),
+    { text: renderCheck(spirit), check: spirit },
+    textRow("c(-{物理防御力}) 物理ダメージ計算"),
+    textRow("c(-{魔法防御力}) 魔法ダメージ計算"),
+    textRow(""),
   );
   append(
     "ムーブ",
@@ -208,23 +221,11 @@ export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): Pale
     if (name && note) append("アイテム効果", textRow(`${caption}：${name}。${note}`));
   }
   append("判定", ...GENERAL_CHECKS.map((name) => checkRow(name)));
-  for (const section of ["リソース操作", "判定"]) {
+  for (const section of ["リアクション", "判定"]) {
     const rows = sections.get(section)!,
       anchor = rows.findIndex((row) => row.check?.judge === "回避判定");
     if (anchor >= 0) rows.splice(anchor + 1, 0, ...evade.map((row) => ({ ...row })));
   }
-  const spirit = checkFormula(
-    "精神",
-    sheet.skills.some((s) => isBearUp(s.name) && s.level > 0) ? 1 : 0,
-  )!;
-  spirit.suffix += "（リアクション）";
-  spirit.judge = spirit.suffix;
-  append(
-    "リソース操作",
-    { text: renderCheck(spirit), check: spirit },
-    textRow("c(-{物理防御力}) 物理ダメージ計算"),
-    textRow("c(-{魔法防御力}) 魔法ダメージ計算"),
-  );
   if (table.items.some((item) => item.label === "強心丹" && /シーン終了まで持続/.test(item.effect)))
     sections.get("シーン終了時リセット")!.unshift(textRow(":強心丹D=0"));
   return serializeSections(sections, warnings);

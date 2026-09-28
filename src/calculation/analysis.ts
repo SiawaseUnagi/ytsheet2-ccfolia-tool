@@ -270,7 +270,7 @@ export function analyzeModifiers(sheet: ParsedSheet): Analysis {
       let clauseStart = 0;
       for (const m of sentence.matchAll(/に\s*([+\-])\s*/g)) {
         const prefix = sentence.slice(clauseStart, m.index);
-        const parsed = leadingAmount(sentence.slice(m.index! + m[0].length), source.level);
+        const parsed = leadingAmount(sentence.slice(m.index! + m[0].length), source.level, true);
         if (!parsed || !/^(?:点|する|し[、,]|させ|$|[、,」])/.test(parsed.rest)) continue;
         // Do not inherit "damage" or "check" from an earlier +1 clause into a defence/initiative clause.
         clauseStart = sentence.length - parsed.rest.length;
@@ -295,6 +295,9 @@ export function analyzeModifiers(sheet: ParsedSheet): Analysis {
             ? {
                 dice: parsed.amount.dice === "0" ? "0" : `-(${parsed.amount.dice})`,
                 fixed: parsed.amount.fixed === "0" ? "0" : `-(${parsed.amount.fixed})`,
+                ...(parsed.amount.fixedExpression
+                  ? { fixedExpression: `-(${parsed.amount.fixedExpression})` }
+                  : {}),
               }
             : parsed.amount;
         if (source.origin && /SL/.test(sentence.slice(m.index))) continue;
