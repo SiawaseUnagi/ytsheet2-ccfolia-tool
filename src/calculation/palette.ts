@@ -31,7 +31,15 @@ export function renderRoll(target: RollTarget, selected: Selection[] = []): stri
   let { dice, fixed } = target.base;
   for (const { modifier, flag } of selected) {
     dice = addTerm(dice, gatedTerm(modifier.amount.dice, flag));
-    fixed = addTerm(fixed, gatedTerm(modifier.amount.fixed, flag));
+    const expression = modifier.amount.fixedExpression;
+    fixed = addTerm(
+      fixed,
+      expression
+        ? flag
+          ? gatedTerm(expression, flag)
+          : `(${expression})`
+        : gatedTerm(modifier.amount.fixed, flag),
+    );
   }
   const simpleDice = (target.kind === "hpSet" || target.kind === "effect") && /^\d+$/.test(dice);
   const formula =
