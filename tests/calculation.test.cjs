@@ -50,7 +50,7 @@ test('equipment recovery dice require a dice-based magic recovery', () => {
   assert.equal(compatible(m, target('レイズ', 'hpSet')), false);
 });
 test('HP heal formula with selected SL bonus and equipment dice', () => {
-  assert.equal(renderRoll(target('ヒール', 'hpHeal'), [{ modifier: modifier('HP回復強化') }, { modifier: modifier('回復の聖印') }]), '(3+2)D+{CL}*3+9 HP回復量');
+  assert.equal(renderRoll(target('ヒール', 'hpHeal'), [{ modifier: modifier('HP回復強化') }, { modifier: modifier('回復の聖印') }]), '(3+2)D+{CL}*3+(3*3) HP回復量');
 });
 test('fixed healing produces a calculation command', () => assert.equal(renderRoll(target('単体固定回復', 'hpHeal')), 'C({CL}*10) HP回復量'));
 test('magic base has its own damage and attribute, not weapon attack', () => {
