@@ -18,14 +18,15 @@ const section = (text, name) => (text.split('### ■' + name + '\n')[1] ?? '').s
 test('scenario reset restores max HP/MP/Fate and existing usage counters', () => {
   const text = generateSessionBase(raw, url, true).fields.palette;
   const reset = section(text, 'シナリオ終了時リセット');
-  assert.deepEqual(reset.trim().split('\n').slice(0, 3), [':HP=40', ':MP=50', ':フェイト=5']);
+  assert.deepEqual(reset.trim().split('\n').slice(0, 3), [':HP=max', ':MP=max', ':フェイト=max']);
   assert.match(reset, /^:全判定テスト=1$/m);
+  assert.doesNotMatch(reset, /^:(?:HP|MP|フェイト)=\d+$/m);
   assert.doesNotMatch(reset, /^:(?:試験ポーション|判定BD|所持金)=/m);
   const next = structuredClone(raw);
   next.hpTotal = '60'; next.mpTotal = '70'; next.fateTotal = '6';
   next.skill.find(s => s.name === '全判定テスト').lv = '2';
   assert.match(section(generateSessionBase(next, url, false).fields.palette,
-    'シナリオ終了時リセット'), /^:HP=60\n:MP=70\n:フェイト=6\n:全判定テスト=2$/m);
+    'シナリオ終了時リセット'), /^:HP=max\n:MP=max\n:フェイト=max\n:全判定テスト=2$/m);
 });
 
 test('only the general 判定 block changes to >=? in both raw and prepared output', () => {
@@ -64,7 +65,7 @@ test('check modifier settings and legacy text parser preserve target identity an
 function oldSnapshot(edit) {
   const generated = generateSessionBase(raw, url, true);
   const old = generated.fields.palette.replaceAll('>=? ', '>=0 ')
-    .replace(':HP=40\n:MP=50\n:フェイト=5\n', '');
+    .replace(':HP=max\n:MP=max\n:フェイト=max\n', '');
   const base = { ...generated.fields, palette: old };
   return {
     key: generated.key, name: raw.characterName, url,
@@ -81,7 +82,7 @@ test('v1 resume keeps exact manual text, and explicit update merges new generate
   const update = planSessionUpdate(opened, structuredClone(raw));
   assert.deepEqual(update.conflicts, []);
   assert.match(section(update.next.working.palette, '判定'), />=\? 【筋力】判定/);
-  assert.match(section(update.next.working.palette, 'シナリオ終了時リセット'), /^:HP=40\n:MP=50\n:フェイト=5/m);
+  assert.match(section(update.next.working.palette, 'シナリオ終了時リセット'), /^:HP=max\n:MP=max\n:フェイト=max/m);
   assert.ok(update.next.working.palette.endsWith('独自の末尾コマンド'));
   assert.equal(update.next.calculation.version, 1);
 });
@@ -92,5 +93,5 @@ test('manually edited checks are preserved and raise a conflict instead of being
   const update = planSessionUpdate(saved, structuredClone(raw));
   assert.ok(update.conflicts.some(c => c.field.includes('チャットパレット')));
   assert.match(update.next.working.palette, /D\+\{筋力判定\}>=12 【筋力】判定/);
-  assert.match(section(update.next.working.palette, 'シナリオ終了時リセット'), /^:HP=40$/m);
+  assert.match(section(update.next.working.palette, 'シナリオ終了時リセット'), /^:HP=max$/m);
 });
