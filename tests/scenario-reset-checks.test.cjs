@@ -95,3 +95,41 @@ test('manually edited checks are preserved and raise a conflict instead of being
   assert.match(update.next.working.palette, /D\+\{筋力判定\}>=12 【筋力】判定/);
   assert.match(section(update.next.working.palette, 'シナリオ終了時リセット'), /^:HP=max$/m);
 });
+
+
+function previousNumericResetSnapshot(edit) {
+  const generated = generateSessionBase(raw, url, true);
+  const currentPalette = generated.fields.palette;
+  const previousPalette = currentPalette.replace(
+    ':HP=max\n:MP=max\n:フェイト=max',
+    ':HP=40\n:MP=50\n:フェイト=5',
+  );
+  assert.notEqual(previousPalette, currentPalette, 'numeric fixture must differ from current output');
+  const baseline = { ...generated.fields, palette: previousPalette };
+  return {
+    key: generated.key, name: raw.characterName, url,
+    savedAt: '2026-11-02T00:00:00.000Z', useFormula: true,
+    generatorVersion: '2026-11-check-threshold-scenario-reset-1',
+    raw: structuredClone(raw), calculation: generated.calculation,
+    base: baseline, working: { ...baseline, palette: edit(previousPalette) },
+  };
+}
+
+test('previous numeric reset save remains unchanged on resume and uses max after explicit update', () => {
+  const saved = previousNumericResetSnapshot(text => text + '\n手編集した追記');
+  const resumed = parseSaveFile(JSON.stringify(fileFor(saved))).current;
+  assert.equal(resumed.working.palette, saved.working.palette);
+  assert.match(section(resumed.working.palette, 'シナリオ終了時リセット'), /^:HP=40\n:MP=50\n:フェイト=5/m);
+  const update = planSessionUpdate(resumed, structuredClone(raw));
+  assert.deepEqual(update.conflicts, []);
+  assert.match(section(update.next.working.palette, 'シナリオ終了時リセット'), /^:HP=max\n:MP=max\n:フェイト=max/m);
+  assert.equal(update.next.working.palette.endsWith('手編集した追記'), true);
+  assert.equal(update.next.calculation.version, 1);
+});
+
+test('a hand-edited numeric reset remains a visible conflict during migration', () => {
+  const saved = previousNumericResetSnapshot(text => text.replace(':HP=40', ':HP=23'));
+  const update = planSessionUpdate(saved, structuredClone(raw));
+  assert.ok(update.conflicts.some(c => c.field.includes('チャットパレット')));
+  assert.match(update.next.working.palette, /^:HP=23$/m);
+});
