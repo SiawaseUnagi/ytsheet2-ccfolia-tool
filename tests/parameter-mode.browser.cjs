@@ -90,7 +90,13 @@ const raw={id:'mode-test',characterName:'出力方式テスト',sheetURL:'https:
   await page.locator('#updateSession').click();await page.locator('#applySessionUpdate').waitFor();await page.locator('#applySessionUpdate').click();
   await page.waitForFunction(()=>document.querySelector('#sessionNotice').textContent.includes('更新を反映して保存'));
   assert.equal(await flag.isChecked(),false);assert.match(await page.locator('#statusEdit').inputValue(),/HP\t45\t45/);
-  assert.equal(await page.locator('#palette').inputValue(),initialPalette);
+  const expectedAfterUpdate=initialPalette.replace(
+    /(### ■シナリオ終了時リセット\n):HP=40(?=\n)/,
+    '$1:HP=45',
+  );
+  assert.notEqual(expectedAfterUpdate,initialPalette);
+  assert.equal(await page.locator('#palette').inputValue(),expectedAfterUpdate);
+  assert.ok(expectedAfterUpdate.endsWith('手編集した宣言'));
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true);
   assert.deepEqual(errors,[]);
   await require('./check-flags.browser-cases.cjs')(context, url);
