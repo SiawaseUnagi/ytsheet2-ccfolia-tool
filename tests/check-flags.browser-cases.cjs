@@ -39,11 +39,12 @@ module.exports = async function checkFlagBrowserCases(context, url) {
     assert.ok(!renamed.includes(':ドッジムーブ=1')); assert.match(renamed, /\{DM\}\*\(2\+2\)/);
     // Preserve an edited evasion formula while another copy still changes.
     const oldRoll = renamed.split('\n').find(line => line.endsWith('>=0 回避判定'));
+    assert.ok(oldRoll && oldRoll.includes('{DM}'));
     const edited = renamed.replace(oldRoll, oldRoll.replace('>=0', '>=12'));
     await page.locator('#palette').fill(edited); await check.uncheck();
     assert.ok((await text()).includes('>=12 回避判定'));
-    const otherRoll = (await text()).split('\n').find(line => line.endsWith('>=0 回避判定'));
-    assert.ok(!otherRoll.includes('{DM}')); await check.check();
+    const otherRoll = (await text()).split('\n').find(line => line.endsWith('>=? 回避判定'));
+    assert.ok(otherRoll && !otherRoll.includes('{DM}')); await check.check();
     assert.ok((await text()).includes('>=12 回避判定'));
     // A named check gets the modifier; its base ability and other checks do not.
     const trap = await openCard('探知の補正');
