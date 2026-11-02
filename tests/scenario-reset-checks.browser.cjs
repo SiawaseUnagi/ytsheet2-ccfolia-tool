@@ -37,7 +37,7 @@ const server = remote ? null : spawn('npm', ['run', 'preview', '--', '--host', '
     await page.waitForFunction(() => !document.querySelector('#gen').disabled);
     const palette=page.locator('#palette');
     const text=await palette.inputValue();
-    assert.match(text, /### ■シナリオ終了時リセット\n:HP=40\n:MP=50\n:フェイト=5/);
+    assert.match(text, /### ■シナリオ終了時リセット\n:HP=max\n:MP=max\n:フェイト=max/);
     assert.match(text, /^:全判定テスト=1$/m);
     const block=(text.split('### ■判定\n')[1] || '').split('\n### ■')[0];
     assert.equal((block.match(/>=\? /g)||[]).length,17);
