@@ -19,6 +19,7 @@ export type RollTarget = {
   magic?: boolean;
   judge?: string;
   attribute?: string;
+  checkThreshold?: "?";
 };
 export type Modifier = {
   id: string;

@@ -54,7 +54,7 @@ export function renderRoll(target: RollTarget, selected: Selection[] = []): stri
           "【$1】判定",
         )
       : target.suffix;
-  return `${formula}${target.kind === "check" ? ">=0" : ""} ${suffix}`;
+  return `${formula}${target.kind === "check" ? `>=${target.checkThreshold ?? "0"}` : ""} ${suffix}`;
 }
 
 function checkTarget(
@@ -64,18 +64,19 @@ function checkTarget(
   skillName?: string,
   attack?: RollTarget["attack"],
 ): RollTarget | null {
-  const m = /^\((.+)\)D\+(.+)>=0 (.+)$/.exec(line);
+  const m = /^\((.+)\)D\+(.+)>=(0|\?) (.+)$/.exec(line);
   if (!m) return null;
   return {
     id,
     title,
     kind: "check",
     base: { dice: m[1], fixed: m[2] },
-    suffix: m[3],
+    suffix: m[4],
     skillName,
     attack,
-    magic: /魔術/.test(m[3]),
-    judge: m[3],
+    magic: /魔術/.test(m[4]),
+    judge: m[4],
+    ...(m[3] === "?" ? { checkThreshold: "?" as const } : {}),
   };
 }
 /** Saved choices use the source ability label, independently of the display. */
@@ -180,7 +181,7 @@ function prepareLegacyPalette(sheet: ParsedSheet, palette: string): PreparedPale
     const check = checkTarget(
       row.text,
       `general-${i}`,
-      `${section}：${row.text.split(">=0 ")[1] ?? "判定"}`,
+      `${section}：${row.text.split(/>=(?:0|\?) /)[1] ?? "判定"}`,
       undefined,
       isWeapon || / 命中判定$/.test(row.text) ? "weapon" : undefined,
     );
@@ -283,6 +284,7 @@ function prepareDocument(sheet: ParsedSheet, document: PaletteDocument): Prepare
         skillName: skill?.name,
         attack,
         magic: /魔術/.test(judge),
+        ...(section === "判定" ? { checkThreshold: "?" as const } : {}),
       };
       if (skill) {
         preserveAbilityIdentity(target, skill.judge);

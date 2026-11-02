@@ -7,6 +7,7 @@ import { singleLineText } from "../utils/normalizeText";
 import { normalizeEffect } from "../calculation/expression";
 import { isBearUp } from "../calculation/attack";
 import { readConsumableTable, consumableCommands } from "../items/tableConsumables";
+import { buildStatusPlan } from "../resources/statusPlan";
 import type { CustomCommandMap, ParsedSheet, YtSkill } from "../ytsheet/types";
 
 const ORDER = [
@@ -110,6 +111,14 @@ export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): Pale
       "ムーブアクションで全力移動を行なう。({移動力}+5m)",
       "ムーブアクションで離脱を行なう。",
     ].map(textRow),
+  );
+  // Only resources with a known maximum get an end-of-scenario restore command.
+  // Scene/scenario usage counters keep their existing, separately scoped resets.
+  append(
+    "シナリオ終了時リセット",
+    ...buildStatusPlan(sheet, custom)
+      .filter((resource) => resource.kind === "resource" && resource.reset === "maximum")
+      .map((resource) => textRow(`:${resource.label}=${resource.max}`)),
   );
   append("マイナー", textRow("マイナーアクション放棄。"), textRow(""));
   const table = readConsumableTable(sheet.raw);
@@ -228,5 +237,9 @@ export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): Pale
   }
   if (table.items.some((item) => item.label === "強心丹" && /シーン終了まで持続/.test(item.effect)))
     sections.get("シーン終了時リセット")!.unshift(textRow(":強心丹D=0"));
+  // In the general check block only, make the target number optional.
+  // Keep the structured check metadata so selected modifiers use the same target.
+  for (const row of sections.get("判定")!)
+    if (row.check) row.text = row.text.replace(/>=0(?= )/, ">=?");
   return serializeSections(sections, warnings);
 }

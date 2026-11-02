@@ -39,11 +39,12 @@ module.exports = async function checkFlagBrowserCases(context, url) {
     assert.ok(!renamed.includes(':ドッジムーブ=1')); assert.match(renamed, /\{DM\}\*\(2\+2\)/);
     // Preserve an edited evasion formula while another copy still changes.
     const oldRoll = renamed.split('\n').find(line => line.endsWith('>=0 回避判定'));
+    assert.ok(oldRoll && oldRoll.includes('{DM}'));
     const edited = renamed.replace(oldRoll, oldRoll.replace('>=0', '>=12'));
     await page.locator('#palette').fill(edited); await check.uncheck();
     assert.ok((await text()).includes('>=12 回避判定'));
-    const otherRoll = (await text()).split('\n').find(line => line.endsWith('>=0 回避判定'));
-    assert.ok(!otherRoll.includes('{DM}')); await check.check();
+    const otherRoll = (await text()).split('\n').find(line => line.endsWith('>=? 回避判定'));
+    assert.ok(otherRoll && !otherRoll.includes('{DM}')); await check.check();
     assert.ok((await text()).includes('>=12 回避判定'));
     // A named check gets the modifier; its base ability and other checks do not.
     const trap = await openCard('探知の補正');
@@ -53,8 +54,8 @@ module.exports = async function checkFlagBrowserCases(context, url) {
     await mode.selectOption('toggle');
     const afterTrap = await text();
     assert.equal(count(afterTrap, ':探知の補正=1'), 1); assert.equal(count(afterTrap, ':探知の補正=0'), 1);
-    assert.ok(afterTrap.split('\n').find(l => l.endsWith('>=0 トラップ探知判定')).includes('{探知の補正}'));
-    assert.ok(!afterTrap.split('\n').find(l => l.endsWith('>=0 危険感知判定')).includes('{探知の補正}'));
+    assert.ok(afterTrap.split('\n').find(l => l.endsWith('>=? トラップ探知判定')).includes('{探知の補正}'));
+    assert.ok(!afterTrap.split('\n').find(l => l.endsWith('>=? 危険感知判定')).includes('{探知の補正}'));
     assert.equal(await page.locator('#calculationEditor [data-target-id] input[aria-label$="：危険の補正"]').count(), 1);
     await page.locator('#copyBottom').click();
     assert.equal(JSON.parse(await page.evaluate(() => navigator.clipboard.readText())).data.commands, afterTrap);
