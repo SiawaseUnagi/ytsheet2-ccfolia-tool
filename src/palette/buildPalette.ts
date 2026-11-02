@@ -112,13 +112,13 @@ export function buildPalette(sheet: ParsedSheet, custom: CustomCommandMap): Pale
       "ムーブアクションで離脱を行なう。",
     ].map(textRow),
   );
-  // Only resources with a known maximum get an end-of-scenario restore command.
+  // Reset eligible resources to their current token maximum, even after level-up.
   // Scene/scenario usage counters keep their existing, separately scoped resets.
   append(
     "シナリオ終了時リセット",
     ...buildStatusPlan(sheet, custom)
       .filter((resource) => resource.kind === "resource" && resource.reset === "maximum")
-      .map((resource) => textRow(`:${resource.label}=${resource.max}`)),
+      .map((resource) => textRow(`:${resource.label}=max`)),
   );
   append("マイナー", textRow("マイナーアクション放棄。"), textRow(""));
   const table = readConsumableTable(sheet.raw);
