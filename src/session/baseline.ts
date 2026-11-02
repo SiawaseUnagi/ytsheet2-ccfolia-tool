@@ -11,7 +11,7 @@ export function advanceCalculationBaseline(base: Fields, before: Fields, next: F
   };
 }
 
-export const GENERATOR_VERSION = "2026-11-check-threshold-scenario-reset-1";
+export const GENERATOR_VERSION = "2026-11-scenario-reset-max-1";
 export function baselineNotice(version?: string): string[] {
   return version === GENERATOR_VERSION
     ? []
