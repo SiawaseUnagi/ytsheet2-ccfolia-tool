@@ -53,8 +53,8 @@ module.exports = async function checkFlagBrowserCases(context, url) {
     await mode.selectOption('toggle');
     const afterTrap = await text();
     assert.equal(count(afterTrap, ':探知の補正=1'), 1); assert.equal(count(afterTrap, ':探知の補正=0'), 1);
-    assert.ok(afterTrap.split('\n').find(l => l.endsWith('>=0 トラップ探知判定')).includes('{探知の補正}'));
-    assert.ok(!afterTrap.split('\n').find(l => l.endsWith('>=0 危険感知判定')).includes('{探知の補正}'));
+    assert.ok(afterTrap.split('\n').find(l => l.endsWith('>=? トラップ探知判定')).includes('{探知の補正}'));
+    assert.ok(!afterTrap.split('\n').find(l => l.endsWith('>=? 危険感知判定')).includes('{探知の補正}'));
     assert.equal(await page.locator('#calculationEditor [data-target-id] input[aria-label$="：危険の補正"]').count(), 1);
     await page.locator('#copyBottom').click();
     assert.equal(JSON.parse(await page.evaluate(() => navigator.clipboard.readText())).data.commands, afterTrap);
