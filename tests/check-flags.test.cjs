@@ -63,7 +63,8 @@ test('ambiguous names remain review items instead of being applied to all checks
 });
 test('evasion companion appears directly below both common evasion checks', () => {
   const s = make({ skill: [dodge] }), p = prepareCalculationPalette(s, buildPalette(s, {}).text);
-  for (const name of ['リアクション', '判定']) assert.match(section(p.text, name), />=0 回避判定\n回避判定と同時に《ドッジムーブ》2を使用。/);
+  assert.match(section(p.text, 'リアクション'), />=0 回避判定\n回避判定と同時に《ドッジムーブ》2を使用。/);
+  assert.match(section(p.text, '判定'), />=\? 回避判定\n回避判定と同時に《ドッジムーブ》2を使用。/);
   assert.equal(count(p.text, '《ドッジムーブ》2を使用。'), 2);
   assert.ok(!section(p.text, '効果参照').includes('ドッジムーブ'));
   assert.equal(count(section(p.text, 'シーン終了時リセット'), ':ドッジムーブ=2'), 1);
